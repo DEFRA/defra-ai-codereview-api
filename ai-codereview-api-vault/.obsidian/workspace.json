@@ -1,0 +1,187 @@
+{
+  "main": {
+    "id": "d04f5ba90355681e",
+    "type": "split",
+    "children": [
+      {
+        "id": "b7b95fad9064ec90",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "4fdf5b1223c4a60a",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "default-prompts/run-add-logging.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "run-add-logging"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "45eaeae6e6e5a9fa",
+    "type": "split",
+    "children": [
+      {
+        "id": "dd5cf73a0cf074d7",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "024bc00d1974c122",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "0dac4b4cbcc7823e",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "55ee855c881696f0",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "a3f59a2044494dc3",
+    "type": "split",
+    "children": [
+      {
+        "id": "bf897b3b61afe946",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "43218477f8d97c91",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks"
+            }
+          },
+          {
+            "id": "c49ae1187a579dac",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links"
+            }
+          },
+          {
+            "id": "263c844d7590bc33",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "a61f1089bfbe90b5",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "Welcome.md"
+              },
+              "icon": "lucide-list",
+              "title": "Outline of Welcome"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "obsidian-excalidraw-plugin:Create new drawing": false,
+      "obsidian-kanban:Create new board": false,
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false
+    }
+  },
+  "active": "4fdf5b1223c4a60a",
+  "lastOpenFiles": [
+    "default-prompts/run-add-docs.md",
+    "default-prompts/run-add-arch-docs.md",
+    "default-prompts/prd-template.md",
+    "default-prompts/create-new-prd.md",
+    "default-prompts/run-linting.md",
+    "default-prompts/run-codebase-analysis.md",
+    "default-prompts/run-check-refactor.md",
+    "default-prompts/run-add-missing-tests.md",
+    "default-prompts/run-save-prompt.md",
+    "default-prompts/run-add-logging.md",
+    "default-prompts/run-tests.md",
+    "default-prompts/run-update-docs.md",
+    "default-prompts/run-refactor-prd-document.md",
+    "default-prompts/run-refactor-prd.md",
+    "Project Kanban.md",
+    "default-prompts",
+    "product-requirements",
+    "architecture",
+    "Welcome.md"
+  ]
+}

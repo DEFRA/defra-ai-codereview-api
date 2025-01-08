@@ -1,0 +1,1 @@
+Analyze the entire codebase and add or modify architecture documentation in the `/architecture` folder.  Be detailed so other developers can read it.
