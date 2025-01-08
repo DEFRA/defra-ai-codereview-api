@@ -1,7 +1,7 @@
-# Defra Codereview API
+# Defra Coder Review API
 
 ## Project Context
-This is a Python API for the Defra Codereview project. The API runs over a AI agents the can review code and provide detailed reports.
+A Python API that uses AI Agents to asynchronously check a code base against multiple standards
 
 ## Language
 - Python
@@ -9,7 +9,7 @@ This is a Python API for the Defra Codereview project. The API runs over a AI ag
 ## Tech Stack
 - FastAPI
 - Anthropic (Claude)
-- Pinecone (Vector Database)
+- MongoDB (Database)
 
 ## Project Structure
 ```
