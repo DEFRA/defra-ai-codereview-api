@@ -1,4 +1,4 @@
-Create a detailed PRD document in an markdown format outlining the following feature requirements:
+Create a detailed PRD document in an markdown format outlining the following feature requirements.  I want the PRD to be in a single downloadable markdown file.  Ensure you use the best practices standards.  Don't include a table of contents.
 
 (detailed requirements here)
 
