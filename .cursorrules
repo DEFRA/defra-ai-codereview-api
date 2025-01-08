@@ -1,16 +1,15 @@
-# [Project Name]
+# Defra Codereview API
 
 ## Project Context
-- [Brief description]
-- [Additional details about the project]
+This is a Python API for the Defra Codereview project. The API runs over a AI agents the can review code and provide detailed reports.
 
 ## Language
 - Python
 
 ## Tech Stack
-- [Library/Framework Name]
-- [Library/Framework Name]
-- [Library/Framework Name]
+- FastAPI
+- Anthropic (Claude)
+- Pinecone (Vector Database)
 
 ## Project Structure
 ```
