@@ -401,3 +401,21 @@ FodyWeavers.xsd
 # JetBrains Rider
 *.sln.iml
 ai-codereview-api-vault/.obsidian/workspace.json
+
+.env
+
+# Python
+venv/
+.env
+__pycache__/
+*.pyc
+
+# MongoDB
+mongodb_data/
+
+# IDE
+.idea/
+.vscode/
+
+# Logs
+*.log
