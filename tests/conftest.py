@@ -19,7 +19,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import FastAPI
-from httpx import AsyncClient
+from fastapi.testclient import TestClient
 from mongomock_motor import AsyncMongoMockClient
 
 from src.main import app
@@ -46,7 +46,7 @@ async def test_app(mock_mongodb) -> AsyncGenerator[FastAPI, None]:
     app.dependency_overrides.clear()
 
 @pytest.fixture
-async def test_client(test_app: FastAPI) -> AsyncGenerator[AsyncClient, None]:
-    """Create an async test client for making HTTP requests."""
-    async with AsyncClient(app=test_app, base_url="http://test") as client:
+def test_client(test_app: FastAPI) -> Generator[TestClient, None, None]:
+    """Create a test client for making HTTP requests."""
+    with TestClient(test_app) as client:
         yield client 

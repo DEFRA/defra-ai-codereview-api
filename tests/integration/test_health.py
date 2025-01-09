@@ -1,16 +1,12 @@
 """Integration tests for health check endpoint."""
-import pytest
-from httpx import AsyncClient
-from fastapi import FastAPI, status
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
-pytestmark = pytest.mark.asyncio
-
-async def test_health_check(
+def test_health_check(
     test_app: FastAPI,
-    test_client: AsyncClient
+    test_client: TestClient
 ) -> None:
     """Test health check endpoint returns healthy status."""
-    response = await test_client.get("/health")
-    
-    assert response.status_code == status.HTTP_200_OK
+    response = test_client.get("/health")
+    assert response.status_code == 200
     assert response.json() == {"status": "healthy"} 
