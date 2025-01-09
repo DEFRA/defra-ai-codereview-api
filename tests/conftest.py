@@ -26,13 +26,6 @@ from src.main import app
 from src.config import settings
 from src.database import get_database
 
-@pytest.fixture(scope="session")
-def event_loop() -> Generator:
-    """Create an instance of the default event loop for the test session."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
-
 @pytest.fixture
 async def mock_mongodb() -> AsyncGenerator[AsyncMongoMockClient, None]:
     """Create a mock MongoDB client."""
