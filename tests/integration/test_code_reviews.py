@@ -237,3 +237,122 @@ def test_get_code_reviews_error(
     assert response.status_code == 500
     data = response.json()
     assert "detail" in data 
+
+@pytest.mark.asyncio
+async def test_create_code_review_background_analysis(
+    test_app: FastAPI,
+    test_client: TestClient,
+    mock_mongodb: AsyncMongoMockClient
+) -> None:
+    """Test that background analysis is triggered when creating a code review."""
+    test_review = {
+        "repository_url": "https://github.com/example/new-repo"
+    }
+
+    analyze_called = False
+    async def mock_analyze_repository(url: str) -> None:
+        nonlocal analyze_called
+        analyze_called = True
+        assert url == test_review["repository_url"]
+
+    with patch('src.database.db', mock_mongodb), \
+         patch('src.api.v1.code_reviews.anthropic_service.analyze_repository', mock_analyze_repository):
+        response = test_client.post("/api/v1/code-reviews", json=test_review)
+
+    assert response.status_code == 201
+    assert analyze_called
+
+@pytest.mark.asyncio
+async def test_get_code_review_string_id_fallback(
+    test_app: FastAPI,
+    test_client: TestClient,
+    mock_mongodb: AsyncMongoMockClient
+) -> None:
+    """Test getting a code review with string ID fallback."""
+    test_review = {
+        "_id": "507f1f77bcf86cd799439011",  # Valid ObjectId as string
+        "repository_url": "https://github.com/example/repo1",
+        "status": ReviewStatus.COMPLETED,
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc)
+    }
+
+    await mock_mongodb.code_reviews.insert_one(test_review)
+
+    with patch('src.database.db', mock_mongodb):
+        response = test_client.get(f"/api/v1/code-reviews/{test_review['_id']}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["_id"] == test_review["_id"]
+
+def test_py_object_id_validation_edge_cases() -> None:
+    """Test PyObjectId validation edge cases."""
+    from src.models.code_review import PyObjectId
+
+    # Test invalid type
+    with pytest.raises(ValueError, match="Invalid ObjectId"):
+        PyObjectId.validate(123)
+
+    # Test invalid string format
+    with pytest.raises(ValueError, match="Invalid ObjectId"):
+        PyObjectId.validate("not-an-object-id")
+
+    # Test valid string format
+    valid_id = "507f1f77bcf86cd799439011"
+    assert PyObjectId.validate(valid_id) == valid_id
+
+@pytest.mark.asyncio
+async def test_get_code_review_not_found(
+    test_app: FastAPI,
+    test_client: TestClient,
+    mock_mongodb: AsyncMongoMockClient
+) -> None:
+    """Test 404 response when code review is not found."""
+    valid_id = "507f1f77bcf86cd799439011"
+
+    with patch('src.database.db', mock_mongodb):
+        response = test_client.get(f"/api/v1/code-reviews/{valid_id}")
+
+    assert response.status_code == 404
+    data = response.json()
+    assert data["detail"] == "Code review not found" 
+
+@pytest.mark.asyncio
+async def test_create_code_review_background_analysis_error(
+    test_app: FastAPI,
+    test_client: TestClient,
+    mock_mongodb: AsyncMongoMockClient
+) -> None:
+    """Test error handling in background analysis during code review creation."""
+    test_review = {
+        "repository_url": "https://github.com/example/new-repo"
+    }
+
+    async def mock_analyze_repository(url: str) -> None:
+        raise Exception("Analysis error")
+
+    with patch('src.database.db', mock_mongodb), \
+         patch('src.api.v1.code_reviews.anthropic_service.analyze_repository', mock_analyze_repository):
+        response = test_client.post("/api/v1/code-reviews", json=test_review)
+
+    # The current implementation returns 500 when background analysis fails
+    assert response.status_code == 500
+    data = response.json()
+    assert "Error creating code review: Analysis error" in data["detail"]
+
+def test_py_object_id_json_schema_generation() -> None:
+    """Test PyObjectId JSON schema generation."""
+    from src.models.code_review import PyObjectId
+    from pydantic.json_schema import GetJsonSchemaHandler
+    from pydantic.json_schema import JsonSchemaValue
+
+    # Create a mock handler
+    class MockHandler(GetJsonSchemaHandler):
+        def __init__(self):
+            pass
+
+    schema = PyObjectId.__get_pydantic_json_schema__(None, MockHandler())
+    assert isinstance(schema, dict)
+    assert schema["type"] == "string"
+    assert schema["pattern"] == "^[0-9a-fA-F]{24}$" 
