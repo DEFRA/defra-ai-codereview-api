@@ -24,7 +24,7 @@ class PyObjectId(str):
             raise ValueError("Invalid ObjectId")
         if isinstance(value, str) and not ObjectId.is_valid(value):
             raise ValueError("Invalid ObjectId")
-        return str(ObjectId(value))
+        return str(value)
 
     @classmethod
     def __get_pydantic_json_schema__(
@@ -37,14 +37,18 @@ class CodeReviewCreate(BaseModel):
     """Input model for creating a code review."""
     repository_url: str
 
-class CodeReview(CodeReviewCreate):
+class CodeReview(BaseModel):
     """CodeReview model for responses."""
-    id: PyObjectId = Field(default_factory=lambda: str(ObjectId()), alias="_id")
+    id: PyObjectId = Field(default_factory=PyObjectId, alias='_id')
+    repository_url: str
     status: ReviewStatus = ReviewStatus.STARTED
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
     class Config:
         """Pydantic config."""
-        json_encoders = {ObjectId: str}
-        populate_by_name = True 
+        allow_population_by_field_name = True
+        json_encoders = {
+            ObjectId: str
+        }
+        arbitrary_types_allowed = True 
