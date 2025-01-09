@@ -33,10 +33,13 @@ class PyObjectId(str):
         """Return the JSON Schema for this type."""
         return {"type": "string", "pattern": "^[0-9a-fA-F]{24}$"}
 
-class CodeReview(BaseModel):
-    """CodeReview model."""
-    id: Optional[PyObjectId] = Field(default_factory=lambda: str(ObjectId()), alias="_id")
+class CodeReviewCreate(BaseModel):
+    """Input model for creating a code review."""
     repository_url: str
+
+class CodeReview(CodeReviewCreate):
+    """CodeReview model for responses."""
+    id: PyObjectId = Field(default_factory=lambda: str(ObjectId()), alias="_id")
     status: ReviewStatus = ReviewStatus.STARTED
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

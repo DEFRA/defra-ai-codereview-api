@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from bson import ObjectId
 from typing import List
-from src.models.code_review import CodeReview
+from src.models.code_review import CodeReview, CodeReviewCreate
 from src.services.anthropic import AnthropicService
 from src.database import get_database
 from src.logging_config import setup_logger
@@ -19,12 +19,13 @@ anthropic_service = AnthropicService()
                 201: {"description": "Code review created successfully"},
                 400: {"description": "Invalid input"}
             })
-async def create_code_review(code_review: CodeReview):
+async def create_code_review(code_review: CodeReviewCreate):
     """Create a new code review."""
     logger.info(f"Creating code review for repository: {code_review.repository_url}")
     try:
         db = await get_database()
-        result = await db.code_reviews.insert_one(code_review.dict(by_alias=True))
+        new_review = CodeReview(**code_review.dict())
+        result = await db.code_reviews.insert_one(new_review.dict(by_alias=True))
         await anthropic_service.analyze_repository(code_review.repository_url)
         created_review = await db.code_reviews.find_one({"_id": result.inserted_id})
         logger.info(f"Created code review with ID: {result.inserted_id}")
