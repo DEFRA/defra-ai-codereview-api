@@ -406,6 +406,7 @@ ai-codereview-api-vault/.obsidian/workspace.json
 
 # Python
 venv/
+.venv/
 .env
 __pycache__/
 *.pyc
@@ -419,3 +420,6 @@ mongodb_data/
 
 # Logs
 *.log
+
+# Test environment variables
+.env.test

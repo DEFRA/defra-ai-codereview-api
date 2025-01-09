@@ -7,7 +7,7 @@ from src.models.code_review import CodeReview, CodeReviewCreate
 from src.services.anthropic import AnthropicService
 from src.database import get_database
 from src.logging_config import setup_logger
-from datetime import datetime
+from datetime import datetime, UTC
 
 logger = setup_logger(__name__)
 
@@ -29,8 +29,8 @@ async def create_code_review(code_review: CodeReviewCreate):
         review_dict = {
             "repository_url": code_review.repository_url,
             "status": "started",
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "created_at": datetime.now(UTC),
+            "updated_at": datetime.now(UTC)
         }
         logger.debug(f"Inserting review document: {review_dict}")
         result = await db.code_reviews.insert_one(review_dict)

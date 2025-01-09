@@ -1,5 +1,5 @@
 """CodeReview model definition."""
-from datetime import datetime
+from datetime import datetime, UTC
 from enum import Enum
 from typing import Optional, Any, ClassVar
 from pydantic import BaseModel, Field, GetJsonSchemaHandler
@@ -42,8 +42,8 @@ class CodeReview(BaseModel):
     id: PyObjectId = Field(default_factory=PyObjectId, alias='_id')
     repository_url: str
     status: ReviewStatus = ReviewStatus.STARTED
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     class Config:
         """Pydantic config."""

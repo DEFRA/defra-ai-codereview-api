@@ -103,7 +103,7 @@ GET /api/v1/code-reviews
 ### Get a Specific Code Review
 
 ```http
-GET /api/v1/code-reviews/{review_id}
+GET /api/v1/code-reviews/{_id}
 ```
 
 ### Health Check
