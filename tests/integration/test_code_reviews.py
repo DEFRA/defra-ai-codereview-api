@@ -4,9 +4,9 @@ from httpx import AsyncClient
 from fastapi import FastAPI, status
 from mongomock_motor import AsyncMongoMockClient
 from datetime import datetime, UTC
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock, AsyncMock
 from src.database import get_database
-from src.models.code_review import ReviewStatus
+from src.models.code_review import ReviewStatus, PyObjectId
 
 pytestmark = pytest.mark.asyncio
 
@@ -133,3 +133,125 @@ async def test_create_code_review_invalid_input(
         
         # Assert response
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY 
+
+async def test_get_code_reviews_with_invalid_id(
+    test_app: FastAPI,
+    test_client: AsyncClient,
+    mock_mongodb: AsyncMongoMockClient
+) -> None:
+    """Test retrieving code reviews with an invalid document id."""
+    # Setup test data with invalid _id
+    test_reviews = [
+        {
+            "_id": "",  # invalid id
+            "repository_url": "https://github.com/example/repo1",
+            "status": ReviewStatus.COMPLETED,
+            "created_at": datetime.now(UTC),
+            "updated_at": datetime.now(UTC)
+        },
+        {
+            "_id": "507f1f77bcf86cd799439011",  # valid id
+            "repository_url": "https://github.com/example/repo2",
+            "status": ReviewStatus.STARTED,
+            "created_at": datetime.now(UTC),
+            "updated_at": datetime.now(UTC)
+        }
+    ]
+    
+    await mock_mongodb.code_reviews.insert_many(test_reviews)
+    
+    with patch('src.database.db', mock_mongodb):
+        response = await test_client.get("/api/v1/code-reviews")
+        
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        # Should only return the valid review
+        assert len(data) == 1
+        assert data[0]["repository_url"] == "https://github.com/example/repo2"
+
+async def test_invalid_object_id_validation():
+    """Test PyObjectId validation with invalid inputs."""
+    with pytest.raises(ValueError, match="Invalid ObjectId"):
+        PyObjectId.validate(123)  # test with non-string/non-ObjectId
+        
+    with pytest.raises(ValueError, match="Invalid ObjectId"):
+        PyObjectId.validate("invalid-id")  # test with invalid string format
+
+@patch('src.api.v1.code_reviews.get_database')
+async def test_get_code_reviews_db_error(
+    mock_get_db,
+    test_app: FastAPI,
+    test_client: AsyncClient,
+    mock_mongodb: AsyncMongoMockClient
+) -> None:
+    """Test error handling when database operation fails."""
+    # Mock the database to raise an exception
+    mock_get_db.side_effect = Exception("Database error")
+    
+    response = await test_client.get("/api/v1/code-reviews")
+    
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert "Error fetching code reviews" in response.json()["detail"] 
+
+@patch('src.api.v1.code_reviews.get_database')
+async def test_create_code_review_db_error(
+    mock_get_db,
+    test_app: FastAPI,
+    test_client: AsyncClient,
+    mock_mongodb: AsyncMongoMockClient
+) -> None:
+    """Test error handling when database operation fails during code review creation."""
+    # Mock the database to raise an exception
+    mock_get_db.side_effect = Exception("Database error")
+    
+    test_review = {
+        "repository_url": "https://github.com/example/new-repo"
+    }
+    
+    response = await test_client.post("/api/v1/code-reviews", json=test_review)
+    
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert "Error creating code review" in response.json()["detail"]
+
+def test_py_object_id_json_schema():
+    """Test PyObjectId JSON schema generation."""
+    schema = PyObjectId.__get_pydantic_json_schema__(None, None)
+    assert schema["type"] == "string"
+    assert schema["pattern"] == "^[0-9a-fA-F]{24}$"
+
+async def test_create_code_review_with_extra_fields(
+    test_app: FastAPI,
+    test_client: AsyncClient,
+    mock_mongodb: AsyncMongoMockClient
+) -> None:
+    """Test creating a code review with extra fields that should be ignored."""
+    test_review = {
+        "repository_url": "https://github.com/example/new-repo",
+        "extra_field": "should be ignored",
+        "status": "INVALID_STATUS"  # Should be ignored, status is set by the API
+    }
+    
+    with patch('src.database.db', mock_mongodb):
+        response = await test_client.post("/api/v1/code-reviews", json=test_review)
+        
+        assert response.status_code == status.HTTP_201_CREATED
+        data = response.json()
+        assert data["repository_url"] == test_review["repository_url"]
+        assert data["status"] == ReviewStatus.STARTED  # Should use default status
+        assert "extra_field" not in data  # Extra field should be ignored 
+
+@patch('src.api.v1.code_reviews.get_database')
+async def test_get_code_review_by_id_error(
+    mock_get_db,
+    test_app: FastAPI,
+    test_client: AsyncClient,
+    mock_mongodb: AsyncMongoMockClient
+) -> None:
+    """Test error handling for non-HTTP exceptions in get_code_review_by_id."""
+    # Mock the database to raise a generic exception
+    mock_get_db.side_effect = Exception("Unexpected error")
+    
+    response = await test_client.get("/api/v1/code-reviews/507f1f77bcf86cd799439011")
+    
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert response.json()["detail"] == "Internal server error" 
