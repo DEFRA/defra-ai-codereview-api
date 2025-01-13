@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 from typing import List, Tuple
 from src.logging_config import setup_logger
+from src.config import settings
 
 logger = setup_logger(__name__)
 
@@ -57,6 +58,20 @@ async def process_standards_repo(temp_dir: Path) -> List[Path]:
     """Process standards repository and save each file separately."""
     logger.debug("Processing standards repository")
     standards_files = []
+
+    # If LLM testing is enabled, use hardcoded test files
+    if settings.LLM_TESTING:
+        logger.info("LLM testing mode enabled - using test standards files")
+        test_files = [x.strip() for x in settings.LLM_TESTING_STANDARDS_FILES.split(",") if x.strip()]
+        for file in test_files:
+            output_file = STANDARDS_DIR / f"{file}.txt"
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write(f"# Test File: {file}\n")
+                f.write("This is a test standards file for LLM testing.")
+            standards_files.append(output_file)
+            logger.debug(f"Created test standards file: {file}")
+            
+        return standards_files
 
     excluded_files = {'README.md', 'CONTRIBUTING.md'}
     valid_suffixes = ('_principles.md', '_standards.md')
