@@ -58,9 +58,11 @@ async def process_standards_repo(temp_dir: Path) -> List[Path]:
     logger.debug("Processing standards repository")
     standards_files = []
 
+    excluded_files = {'README.md', 'CONTRIBUTING.md'}
+
     for root, _, files in os.walk(temp_dir):
         for file in files:
-            if '.git' in root or not file.endswith(('.md', '.txt')):
+            if '.git' in root or not file.endswith(('.md', '.txt')) or file in excluded_files:
                 continue
 
             source_path = Path(root) / file
