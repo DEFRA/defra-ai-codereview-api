@@ -73,7 +73,7 @@ Relevant Files/Sections:
 
 async def check_compliance(codebase_file: Path, standards_files: List[Path]) -> str:
     """Check codebase compliance against standards using Anthropic's Claude."""
-    logger.debug("Starting compliance check")
+    logger.info("Starting compliance check")
 
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
@@ -107,8 +107,7 @@ async def check_compliance(codebase_file: Path, standards_files: List[Path]) -> 
         user_prompt = await generate_user_prompt(standard_content, codebase_content)
 
         try:
-            logger.debug(
-                "Sending request to Anthropic API with system prompt:")
+            logger.debug("Sending request to Anthropic API")
 
             response = client.messages.create(
                 model=model,
@@ -140,4 +139,5 @@ async def check_compliance(codebase_file: Path, standards_files: List[Path]) -> 
             # Also keep track of the content for the return value
             final_report += error_message
 
+    logger.info("Finished compliance check")
     return final_report
