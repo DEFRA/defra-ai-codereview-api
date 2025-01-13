@@ -1,4 +1,11 @@
-"""Integration tests for get code review by ID endpoint."""
+"""Integration tests for the code review retrieval endpoint.
+
+This module contains integration tests that verify the functionality of:
+1. Retrieving a code review by ID
+2. Handling various ID formats and validation
+3. Error handling for invalid IDs and database failures
+4. PyObjectId model validation and schema generation
+"""
 from datetime import datetime, timezone
 from unittest.mock import patch
 import pytest
@@ -10,87 +17,120 @@ from bson import ObjectId
 
 
 @pytest.mark.asyncio
-async def test_get_code_review_by_id(
+async def test_get_code_review_by_id_returns_correct_review(
     test_app: FastAPI,
     test_client: TestClient,
     mock_mongodb: AsyncMongoMockClient
 ) -> None:
-    """Test getting a code review by ID."""
-    # Test data
+    """
+    Test successful retrieval of a code review by ID.
+    
+    Given: A code review exists in the database
+    When: Requesting the code review by its ID
+    Then: Should return 200 with the correct review data
+    """
+    # Given
     test_review = {
         "repository_url": "https://github.com/example/repo1",
         "status": ReviewStatus.COMPLETED,
         "created_at": datetime.now(timezone.utc),
         "updated_at": datetime.now(timezone.utc)
     }
-
-    # Insert test data
     result = await mock_mongodb.code_reviews.insert_one(test_review)
     test_review['_id'] = str(result.inserted_id)
 
-    # Patch the database connection
+    # When
     with patch('src.database.db', mock_mongodb):
-        # Make request to get the code review by ID
         response = test_client.get(
             f"/api/v1/code-reviews/{test_review['_id']}")
 
-    # Assert response
+    # Then
     assert response.status_code == 200
     data = response.json()
     assert data["repository_url"] == test_review["repository_url"]
     assert data["_id"] == test_review["_id"]
 
 
-def test_get_code_review_by_id_error(
+def test_get_code_review_by_id_rejects_invalid_id_format(
     test_app: FastAPI,
     test_client: TestClient,
     mock_mongodb: AsyncMongoMockClient
 ) -> None:
-    """Test error handling when getting a code review by ID."""
+    """
+    Test validation of ID format.
+    
+    Given: An invalid ID format
+    When: Requesting a code review with that ID
+    Then: Should return 400 with validation error
+    """
+    # When
     with patch('src.database.db', mock_mongodb):
-        # Test with invalid ObjectId format
         response = test_client.get("/api/v1/code-reviews/invalid-id")
 
+    # Then
     assert response.status_code == 400
     data = response.json()
     assert "detail" in data
 
 
-def test_py_object_id_validation() -> None:
-    """Test PyObjectId validation."""
-    # Test valid ObjectId
+def test_py_object_id_validates_correct_format() -> None:
+    """
+    Test PyObjectId validation with valid input.
+    
+    Given: A valid ObjectId
+    When: Creating a PyObjectId from it
+    Then: Should create object with correct string representation
+    """
+    # Given
     obj_id = ObjectId()
+    
+    # When
     py_obj_id = PyObjectId(obj_id)
+    
+    # Then
     assert str(py_obj_id) == str(obj_id)
 
 
-def test_database_error_handling(
+def test_get_code_review_by_id_handles_database_errors(
     test_app: FastAPI,
     test_client: TestClient
 ) -> None:
-    """Test database error handling in endpoints."""
-
-    # Mock the database connection to raise an exception
+    """
+    Test error handling for database failures.
+    
+    Given: Database connection fails
+    When: Requesting a code review by ID
+    Then: Should return 500 with error details
+    """
+    # Given
     async def mock_get_database():
         raise Exception("Database connection error")
 
+    # When
     with patch('src.api.v1.code_reviews.get_database', mock_get_database):
-        # Test error handling in get_code_review
         response = test_client.get(
             "/api/v1/code-reviews/507f1f77bcf86cd799439011")
 
+    # Then
     assert response.status_code == 500
     data = response.json()
     assert "detail" in data
 
 
 @pytest.mark.asyncio
-async def test_get_code_review_string_id_fallback(
+async def test_get_code_review_accepts_string_id(
     test_app: FastAPI,
     test_client: TestClient,
     mock_mongodb: AsyncMongoMockClient
 ) -> None:
-    """Test getting a code review with string ID fallback."""
+    """
+    Test support for string ID format.
+    
+    Given: A code review with string ID exists in database
+    When: Requesting the code review using that ID
+    Then: Should return 200 with correct review data
+    """
+    # Given
     test_review = {
         "_id": "507f1f77bcf86cd799439011",  # Valid ObjectId as string
         "repository_url": "https://github.com/example/repo1",
@@ -98,20 +138,27 @@ async def test_get_code_review_string_id_fallback(
         "created_at": datetime.now(timezone.utc),
         "updated_at": datetime.now(timezone.utc)
     }
-
     await mock_mongodb.code_reviews.insert_one(test_review)
 
+    # When
     with patch('src.database.db', mock_mongodb):
         response = test_client.get(
             f"/api/v1/code-reviews/{test_review['_id']}")
 
+    # Then
     assert response.status_code == 200
     data = response.json()
     assert data["_id"] == test_review["_id"]
 
 
-def test_py_object_id_validation_edge_cases() -> None:
-    """Test PyObjectId validation edge cases."""
+def test_py_object_id_handles_validation_edge_cases() -> None:
+    """
+    Test PyObjectId validation with edge cases.
+    
+    Given: Various invalid and valid ID formats
+    When: Validating each format
+    Then: Should correctly handle each case
+    """
     # Test invalid type
     with pytest.raises(ValueError, match="Invalid ObjectId"):
         PyObjectId.validate(123)
@@ -126,33 +173,51 @@ def test_py_object_id_validation_edge_cases() -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_code_review_not_found(
+async def test_get_code_review_returns_404_when_not_found(
     test_app: FastAPI,
     test_client: TestClient,
     mock_mongodb: AsyncMongoMockClient
 ) -> None:
-    """Test 404 response when code review is not found."""
+    """
+    Test handling of non-existent reviews.
+    
+    Given: No code review exists in database
+    When: Requesting a code review with valid but non-existent ID
+    Then: Should return 404 with not found message
+    """
+    # Given
     valid_id = "507f1f77bcf86cd799439011"
 
+    # When
     with patch('src.database.db', mock_mongodb):
         response = test_client.get(f"/api/v1/code-reviews/{valid_id}")
 
+    # Then
     assert response.status_code == 404
     data = response.json()
     assert data["detail"] == "Code review not found"
 
 
-def test_py_object_id_json_schema_generation() -> None:
-    """Test PyObjectId JSON schema generation."""
+def test_py_object_id_generates_correct_json_schema() -> None:
+    """
+    Test PyObjectId JSON schema generation.
+    
+    Given: A PyObjectId class
+    When: Generating its JSON schema
+    Then: Should return correct schema with string type and pattern
+    """
+    # Given
     from pydantic.json_schema import GetJsonSchemaHandler
     from pydantic.json_schema import JsonSchemaValue
 
-    # Create a mock handler
     class MockHandler(GetJsonSchemaHandler):
         def __init__(self):
             pass
 
+    # When
     schema = PyObjectId.__get_pydantic_json_schema__(None, MockHandler())
+
+    # Then
     assert isinstance(schema, dict)
     assert schema["type"] == "string"
     assert schema["pattern"] == "^[0-9a-fA-F]{24}$" 

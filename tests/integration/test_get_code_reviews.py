@@ -1,4 +1,10 @@
-"""Integration tests for get all code reviews endpoint."""
+"""Integration tests for the code reviews listing endpoint.
+
+This module contains integration tests that verify the functionality of:
+1. Retrieving all code reviews
+2. Handling invalid data in the database
+3. Error handling for database failures
+"""
 from datetime import datetime, timezone
 from unittest.mock import patch
 import pytest
@@ -9,13 +15,19 @@ from src.models.code_review import ReviewStatus
 
 
 @pytest.mark.asyncio
-async def test_get_code_reviews(
+async def test_get_code_reviews_returns_all_reviews(
     test_app: FastAPI,
     test_client: TestClient,
     mock_mongodb: AsyncMongoMockClient
 ) -> None:
-    """Test getting all code reviews."""
-    # Test data
+    """
+    Test successful retrieval of all code reviews.
+    
+    Given: Multiple code reviews exist in the database
+    When: Requesting all code reviews
+    Then: Should return 200 with list of all reviews
+    """
+    # Given
     test_reviews = [
         {
             "repository_url": "https://github.com/example/repo1",
@@ -30,16 +42,13 @@ async def test_get_code_reviews(
             "updated_at": datetime.now(timezone.utc)
         }
     ]
-
-    # Insert test data
     await mock_mongodb.code_reviews.insert_many(test_reviews)
 
-    # Patch the database connection
+    # When
     with patch('src.database.db', mock_mongodb):
-        # Make request to get all code reviews
         response = test_client.get("/api/v1/code-reviews")
 
-    # Assert response
+    # Then
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 2
@@ -48,13 +57,19 @@ async def test_get_code_reviews(
 
 
 @pytest.mark.asyncio
-async def test_get_code_reviews_with_invalid_id(
+async def test_get_code_reviews_filters_invalid_records(
     test_app: FastAPI,
     test_client: TestClient,
     mock_mongodb: AsyncMongoMockClient
 ) -> None:
-    """Test get_code_reviews with invalid _id in database."""
-    # Setup test data with invalid _id
+    """
+    Test handling of invalid records in database.
+    
+    Given: A code review with invalid _id exists in database
+    When: Requesting all code reviews
+    Then: Should return 200 with invalid records filtered out
+    """
+    # Given
     test_reviews = [
         {
             "_id": "",  # Invalid _id
@@ -64,30 +79,38 @@ async def test_get_code_reviews_with_invalid_id(
             "updated_at": datetime.now(timezone.utc)
         }
     ]
-
     await mock_mongodb.code_reviews.insert_many(test_reviews)
 
+    # When
     with patch('src.database.db', mock_mongodb):
         response = test_client.get("/api/v1/code-reviews")
 
+    # Then
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 0  # Invalid review should be filtered out
 
 
-def test_get_code_reviews_error(
+def test_get_code_reviews_handles_database_errors(
     test_app: FastAPI,
     test_client: TestClient
 ) -> None:
-    """Test error handling in get_code_reviews endpoint."""
-
-    # Mock the database connection to raise an exception
+    """
+    Test error handling for database failures.
+    
+    Given: Database connection fails
+    When: Requesting all code reviews
+    Then: Should return 500 with error details
+    """
+    # Given
     async def mock_get_database():
         raise Exception("Database error")
 
+    # When
     with patch('src.api.v1.code_reviews.get_database', mock_get_database):
         response = test_client.get("/api/v1/code-reviews")
 
+    # Then
     assert response.status_code == 500
     data = response.json()
     assert "detail" in data 
