@@ -75,6 +75,7 @@ async def process_standards_repo(temp_dir: Path) -> List[Path]:
                     f.write(f"# File: {file}\n")
                     f.write(content)
                 standards_files.append(output_file)
+                logger.debug(f"Processed standards file: {source_file}")
             except (UnicodeDecodeError, IOError) as e:
                 logger.warning(f"Skipping standards file {
                                source_path}: {str(e)}")

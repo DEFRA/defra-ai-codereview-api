@@ -16,23 +16,53 @@ Consider the codebase as a whole when evaluating compliance."""
 
 async def generate_user_prompt(standard_content: str, codebase_content: str) -> str:
     """Generate the user prompt for the Anthropic model."""
-    prompt = f"""Given the standard below:
+    prompt = f"""Given the set of standards below:
 {standard_content}
 
-Compare the entire codebase of the submitted repository below, to assess how well
-the relevant standards are adhered to:
+Compare the entire codebase of the submitted repository below, to assess how well the relevant standards are adhered to:
 {codebase_content}
 
 For each standard:
 - Determine if the codebase as a whole is compliant (true/false)
-- List specific files/sections relevant to the standard
-- If non-compliant, provide detailed recommendations
+- List specific files/sections in the codebase that are relevant to the standard (if any)
+- If non-compliant, provide concise recommendations - 1-2 sentences
 - Consider dependencies and interactions between different parts of the code
 
-Generate a detailed compliance report that includes:
-- Overall compliance assessment
+Generate a informative but concise compliance report that includes:
 - Per-standard analysis
-- Specific recommendations for improvements"""
+- Specific recommendations for improvements
+
+Below is a example of the report format (Replace all text in [brackets] with actual content - don't leave the square brackets in the final report):
+
+## [Standard Category 1]
+
+Compliant: **[Yes/No/Partially]**
+
+Relevant Files/Sections:
+- [file/path/1]
+- [file/path/2]
+
+[Describe how the codebase implements or fails to implement this standard - keep this informative and concise]
+[If partially compliant or non-compliant, explain specific issues - keep this informative and concise]
+
+## [Standard Category 2]
+
+Compliant: [Yes/No/Partially]
+
+Relevant Files/Sections:
+- [file/path/1]
+- [file/path/2]
+
+[Describe how the codebase implements or fails to implement this standard - keep this informative and concise]
+[If partially compliant or non-compliant, explain specific issues - keep this informative and concise]
+
+[Repeat for each standard category.]
+
+## Specific Recommendations
+
+- [Describe specific change needed]
+- [Additional action items as needed]
+"""
 
     # Log the complete prompt and word count
     word_count = len(prompt.split())
@@ -83,6 +113,7 @@ async def check_compliance(codebase_file: Path, standards_files: List[Path]) -> 
             response = client.messages.create(
                 model=model,
                 max_tokens=4096,
+                temperature=0,
                 system=SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": user_prompt}]
             )
