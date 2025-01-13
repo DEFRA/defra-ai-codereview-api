@@ -1,0 +1,112 @@
+"""Standards Checking Agent for compliance analysis."""
+import os
+from pathlib import Path
+from typing import List
+from anthropic import Anthropic
+from src.logging_config import setup_logger
+
+logger = setup_logger(__name__)
+
+SYSTEM_PROMPT = """You are a code compliance analysis expert.
+Analyze code against compliance standards.
+Determine if code meets each standard.
+Provide detailed recommendations for non-compliant areas.
+Consider the codebase as a whole when evaluating compliance."""
+
+
+async def generate_user_prompt(standard_content: str, codebase_content: str) -> str:
+    """Generate the user prompt for the Anthropic model."""
+    prompt = f"""Given the standard below:
+{standard_content}
+
+Compare the entire codebase of the submitted repository below, to assess how well
+the relevant standards are adhered to:
+{codebase_content}
+
+For each standard:
+- Determine if the codebase as a whole is compliant (true/false)
+- List specific files/sections relevant to the standard
+- If non-compliant, provide detailed recommendations
+- Consider dependencies and interactions between different parts of the code
+
+Generate a detailed compliance report that includes:
+- Overall compliance assessment
+- Per-standard analysis
+- Specific recommendations for improvements"""
+
+    # Log the complete prompt and word count
+    word_count = len(prompt.split())
+    logger.debug(f"Generated prompt word count: {word_count}")
+
+    return prompt
+
+
+async def check_compliance(codebase_file: Path, standards_files: List[Path]) -> str:
+    """Check codebase compliance against standards using Anthropic's Claude."""
+    logger.debug("Starting compliance check")
+
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise ValueError("ANTHROPIC_API_KEY environment variable is not set")
+
+    client = Anthropic(api_key=api_key)
+    model = "claude-3-sonnet-20240229"
+
+    # Read codebase content
+    with open(codebase_file, 'r', encoding='utf-8') as f:
+        codebase_content = f.read()
+        logger.debug(f"Codebase content length: {
+                     len(codebase_content)} characters")
+
+    # Initialize the report file
+    report_path = Path("data") / "compliance_report.md"
+    with open(report_path, 'w', encoding='utf-8') as f:
+        f.write("# Code Compliance Report\n\n")
+
+    final_report = ""
+
+    # Process each standard
+    for standard_file in standards_files:
+        logger.debug(f"Processing standard: {standard_file}")
+
+        with open(standard_file, 'r', encoding='utf-8') as f:
+            standard_content = f.read()
+            logger.debug(f"Standard content length: {
+                         len(standard_content)} characters")
+
+        user_prompt = await generate_user_prompt(standard_content, codebase_content)
+
+        try:
+            logger.debug(
+                "Sending request to Anthropic API with system prompt:")
+
+            response = client.messages.create(
+                model=model,
+                max_tokens=4096,
+                system=SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": user_prompt}]
+            )
+
+            # Append this response to the report file immediately
+            standard_section = f"\n## Standard: {
+                standard_file.name}\n\n{response.content[0].text}\n"
+            with open(report_path, 'a', encoding='utf-8') as f:
+                f.write(standard_section)
+
+            # Also keep track of the content for the return value
+            final_report += standard_section
+
+        except Exception as e:
+            error_message = f"\n## Standard: {
+                standard_file.name}\n\nError processing standard: {str(e)}\n"
+            logger.error(f"Error processing standard {
+                         standard_file}: {str(e)}")
+
+            # Append error to the report file immediately
+            with open(report_path, 'a', encoding='utf-8') as f:
+                f.write(error_message)
+
+            # Also keep track of the content for the return value
+            final_report += error_message
+
+    return final_report

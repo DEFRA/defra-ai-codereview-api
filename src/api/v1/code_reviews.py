@@ -1,16 +1,60 @@
 """Code review API endpoints."""
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, BackgroundTasks
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from bson import ObjectId
 from typing import List
-from src.models.code_review import CodeReview, CodeReviewCreate
+from datetime import datetime, UTC
+from src.models.code_review import CodeReview, CodeReviewCreate, ReviewStatus
 from src.database import get_database
 from src.logging_config import setup_logger
-from datetime import datetime, UTC
+from src.agents.git_repos_agent import process_repositories
+from src.agents.standards_agent import check_compliance
 
 logger = setup_logger(__name__)
 
 router = APIRouter()
+
+
+async def process_code_review(review_id: str, repository_url: str):
+    """Process a code review in the background."""
+    try:
+        db = await get_database()
+
+        # Update status to in progress
+        await db.code_reviews.update_one(
+            {"_id": ObjectId(review_id)},
+            {"$set": {
+                "status": ReviewStatus.IN_PROGRESS,
+                "updated_at": datetime.now(UTC)
+            }}
+        )
+
+        # Process repositories
+        codebase_file, standards_files = await process_repositories(repository_url)
+
+        # Check compliance
+        compliance_report = await check_compliance(codebase_file, standards_files)
+
+        # Update review with results
+        await db.code_reviews.update_one(
+            {"_id": ObjectId(review_id)},
+            {"$set": {
+                "status": ReviewStatus.COMPLETED,
+                "compliance_report": compliance_report,
+                "updated_at": datetime.now(UTC)
+            }}
+        )
+
+    except Exception as e:
+        logger.error(f"Error processing code review: {str(e)}", exc_info=True)
+        # Update review status to failed
+        await db.code_reviews.update_one(
+            {"_id": ObjectId(review_id)},
+            {"$set": {
+                "status": ReviewStatus.FAILED,
+                "updated_at": datetime.now(UTC)
+            }}
+        )
 
 
 @router.post("/code-reviews", response_model=CodeReview, status_code=status.HTTP_201_CREATED,
@@ -19,7 +63,7 @@ router = APIRouter()
                  201: {"description": "Code review created successfully"},
                  400: {"description": "Invalid input"}
              })
-async def create_code_review(code_review: CodeReviewCreate):
+async def create_code_review(code_review: CodeReviewCreate, background_tasks: BackgroundTasks):
     """Create a new code review."""
     logger.info(f"Creating code review for repository: {
                 code_review.repository_url}")
@@ -28,13 +72,20 @@ async def create_code_review(code_review: CodeReviewCreate):
         # Create initial document without _id
         review_dict = {
             "repository_url": code_review.repository_url,
-            "status": "started",
+            "status": ReviewStatus.STARTED,
             "created_at": datetime.now(UTC),
             "updated_at": datetime.now(UTC)
         }
         logger.debug(f"Inserting review document: {review_dict}")
         result = await db.code_reviews.insert_one(review_dict)
         logger.debug(f"Insert result: {result.inserted_id}")
+
+        # Add background task
+        background_tasks.add_task(
+            process_code_review,
+            str(result.inserted_id),
+            code_review.repository_url
+        )
 
         # Fetch the created document
         created_review = await db.code_reviews.find_one({"_id": result.inserted_id})
