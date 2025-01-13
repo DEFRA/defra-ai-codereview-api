@@ -50,6 +50,23 @@ async def test_flatten_repository(mock_repo_structure, tmp_path):
     assert "node_modules" not in content
 
 @pytest.mark.asyncio
+async def test_flatten_repository_error_handling(mock_repo_structure, tmp_path):
+    """Test flatten_repository error handling for unreadable files."""
+    output_file = tmp_path / "output.txt"
+    
+    # Create a file that will raise UnicodeDecodeError
+    binary_file = mock_repo_structure / "binary.dat"
+    with open(binary_file, 'wb') as f:
+        f.write(b'\x80\x81')
+    
+    await flatten_repository(mock_repo_structure, output_file)
+    
+    # Check output file exists and contains expected content
+    assert output_file.exists()
+    content = output_file.read_text()
+    assert b'\x80\x81' not in content.encode('utf-8')
+
+@pytest.mark.asyncio
 async def test_process_standards_repo_llm_testing(mock_temp_dir):
     """Test process_standards_repo with LLM testing enabled."""
     with patch('src.agents.git_repos_agent.settings') as mock_settings:
@@ -83,6 +100,20 @@ async def test_process_standards_repo_normal(mock_temp_dir):
         assert any("standards" in str(path) for path in result)
 
 @pytest.mark.asyncio
+async def test_process_standards_repo_error_handling(mock_temp_dir):
+    """Test process_standards_repo error handling for unreadable files."""
+    with patch('src.agents.git_repos_agent.settings') as mock_settings:
+        mock_settings.LLM_TESTING = False
+        
+        # Create a standards file that will raise UnicodeDecodeError
+        standards_file = mock_temp_dir / "test_standards.md"
+        with open(standards_file, 'wb') as f:
+            f.write(b'\x80\x81')
+        
+        result = await process_standards_repo(mock_temp_dir)
+        assert len(result) == 0
+
+@pytest.mark.asyncio
 async def test_clone_repo():
     """Test clone_repo function."""
     with patch('git.Repo.clone_from') as mock_clone:
@@ -92,6 +123,21 @@ async def test_clone_repo():
         await clone_repo(repo_url, target_dir)
         
         mock_clone.assert_called_once_with(repo_url, target_dir)
+
+@pytest.mark.asyncio
+async def test_clone_repo_existing_directory():
+    """Test clone_repo handles existing directory cleanup."""
+    with patch('git.Repo.clone_from') as mock_clone, \
+         patch('shutil.rmtree') as mock_rmtree:
+        target_dir = Path("test_dir")
+        repo_url = "https://github.com/test/repo.git"
+        
+        # Create a mock directory that exists
+        with patch.object(Path, 'exists', return_value=True):
+            await clone_repo(repo_url, target_dir)
+            
+            mock_rmtree.assert_called_once_with(target_dir)
+            mock_clone.assert_called_once_with(repo_url, target_dir)
 
 @pytest.mark.asyncio
 async def test_process_repositories():

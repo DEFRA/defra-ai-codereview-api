@@ -1,6 +1,7 @@
 """Integration tests for code reviews endpoints."""
 from datetime import datetime, timezone
 from unittest.mock import patch
+from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
@@ -344,3 +345,135 @@ def test_py_object_id_json_schema_generation() -> None:
     assert isinstance(schema, dict)
     assert schema["type"] == "string"
     assert schema["pattern"] == "^[0-9a-fA-F]{24}$"
+
+
+@pytest.mark.asyncio
+async def test_process_code_review_error_handling(
+    test_app: FastAPI,
+    test_client: TestClient,
+    mock_mongodb: AsyncMongoMockClient
+) -> None:
+    """Test error handling in process_code_review background task."""
+    from src.api.v1.code_reviews import process_code_review
+    
+    # Create a test review
+    test_review = {
+        "repository_url": "https://github.com/example/repo1",
+        "status": ReviewStatus.STARTED,
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc)
+    }
+    
+    result = await mock_mongodb.code_reviews.insert_one(test_review)
+    review_id = str(result.inserted_id)
+    
+    # Mock process_repositories to raise an exception
+    with patch('src.api.v1.code_reviews.process_repositories') as mock_process:
+        mock_process.side_effect = Exception("Test error")
+        
+        # Run the background task
+        with patch('src.database.db', mock_mongodb):
+            await process_code_review(review_id, test_review["repository_url"])
+    
+    # Verify the review was updated with failed status
+    updated_review = await mock_mongodb.code_reviews.find_one({"_id": result.inserted_id})
+    assert updated_review["status"] == ReviewStatus.FAILED
+    assert "updated_at" in updated_review
+
+
+@pytest.mark.asyncio
+async def test_create_code_review_database_error(
+    test_app: FastAPI,
+    test_client: TestClient,
+    mock_mongodb: AsyncMongoMockClient
+) -> None:
+    """Test error handling in create_code_review when database operation fails."""
+    # Mock the database to raise an exception
+    async def mock_get_database():
+        raise Exception("Database connection error")
+    
+    with patch('src.api.v1.code_reviews.get_database', mock_get_database):
+        response = test_client.post(
+            "/api/v1/code-reviews",
+            json={"repository_url": "https://github.com/example/repo"}
+        )
+    
+    assert response.status_code == 500
+    assert "Error creating code review" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_process_code_review_success(
+    test_app: FastAPI,
+    test_client: TestClient,
+    mock_mongodb: AsyncMongoMockClient
+) -> None:
+    """Test successful execution of process_code_review background task."""
+    from src.api.v1.code_reviews import process_code_review
+    from pathlib import Path
+    
+    # Create a test review
+    test_review = {
+        "repository_url": "https://github.com/example/repo1",
+        "status": ReviewStatus.STARTED,
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc)
+    }
+    
+    result = await mock_mongodb.code_reviews.insert_one(test_review)
+    review_id = str(result.inserted_id)
+    
+    # Mock successful repository processing and compliance check
+    with patch('src.api.v1.code_reviews.process_repositories') as mock_process, \
+         patch('src.api.v1.code_reviews.check_compliance') as mock_compliance:
+        
+        mock_process.return_value = (Path("codebase.txt"), [Path("standards.txt")])
+        mock_compliance.return_value = {"status": "compliant"}
+        
+        # Run the background task
+        with patch('src.database.db', mock_mongodb):
+            await process_code_review(review_id, test_review["repository_url"])
+    
+    # Verify the review was updated with completed status and compliance report
+    updated_review = await mock_mongodb.code_reviews.find_one({"_id": result.inserted_id})
+    assert updated_review["status"] == ReviewStatus.COMPLETED
+    assert updated_review["compliance_report"] == {"status": "compliant"}
+    assert "updated_at" in updated_review
+
+
+@pytest.mark.asyncio
+async def test_process_code_review_compliance_error(
+    test_app: FastAPI,
+    test_client: TestClient,
+    mock_mongodb: AsyncMongoMockClient
+) -> None:
+    """Test error handling in process_code_review when compliance check fails."""
+    from src.api.v1.code_reviews import process_code_review
+    from pathlib import Path
+    
+    # Create a test review
+    test_review = {
+        "repository_url": "https://github.com/example/repo1",
+        "status": ReviewStatus.STARTED,
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc)
+    }
+    
+    result = await mock_mongodb.code_reviews.insert_one(test_review)
+    review_id = str(result.inserted_id)
+    
+    # Mock successful repository processing but failed compliance check
+    with patch('src.api.v1.code_reviews.process_repositories') as mock_process, \
+         patch('src.api.v1.code_reviews.check_compliance') as mock_compliance:
+        
+        mock_process.return_value = (Path("codebase.txt"), [Path("standards.txt")])
+        mock_compliance.side_effect = Exception("Compliance check failed")
+        
+        # Run the background task
+        with patch('src.database.db', mock_mongodb):
+            await process_code_review(review_id, test_review["repository_url"])
+    
+    # Verify the review was updated with failed status
+    updated_review = await mock_mongodb.code_reviews.find_one({"_id": result.inserted_id})
+    assert updated_review["status"] == ReviewStatus.FAILED
+    assert "updated_at" in updated_review
