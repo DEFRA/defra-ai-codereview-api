@@ -59,10 +59,14 @@ async def process_standards_repo(temp_dir: Path) -> List[Path]:
     standards_files = []
 
     excluded_files = {'README.md', 'CONTRIBUTING.md'}
+    valid_suffixes = ('_principles.md', '_standards.md')
 
     for root, _, files in os.walk(temp_dir):
         for file in files:
-            if '.git' in root or not file.endswith(('.md', '.txt')) or file in excluded_files:
+            if '.git' in root or file in excluded_files:
+                continue
+                
+            if not any(file.endswith(suffix) for suffix in valid_suffixes):
                 continue
 
             source_path = Path(root) / file
@@ -75,10 +79,9 @@ async def process_standards_repo(temp_dir: Path) -> List[Path]:
                     f.write(f"# File: {file}\n")
                     f.write(content)
                 standards_files.append(output_file)
-                logger.debug(f"Processed standards file: {source_file}")
+                logger.debug(f"Processed standards file: {file}")
             except (UnicodeDecodeError, IOError) as e:
-                logger.warning(f"Skipping standards file {
-                               source_path}: {str(e)}")
+                logger.warning(f"Skipping standards file {source_path}: {str(e)}")
 
     return standards_files
 
