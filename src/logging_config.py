@@ -1,27 +1,40 @@
-"""Logging configuration."""
+"""Logging configuration for the application."""
 import logging
 import sys
-from src.config import settings
+from datetime import datetime
+from pathlib import Path
+
 
 def setup_logger(name: str) -> logging.Logger:
-    """Configure and return a logger instance."""
+    """Set up a logger with both file and console handlers."""
     logger = logging.getLogger(name)
-    
-    # Set log level from environment variable
-    logger.setLevel(settings.LOG_LEVEL)
 
-    # Console handler
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(settings.LOG_LEVEL)
+    # Only add handlers if the logger doesn't have any
+    if not logger.handlers:
+        logger.setLevel(logging.DEBUG)
 
-    # Format
-    formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    console_handler.setFormatter(formatter)
+        # Create formatters
+        detailed_formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
 
-    # Remove existing handlers to prevent duplicates
-    logger.handlers.clear()
-    
-    logger.addHandler(console_handler)
-    return logger 
+        # Console handler (INFO level)
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setLevel(logging.INFO)
+        console_handler.setFormatter(detailed_formatter)
+        logger.addHandler(console_handler)
+
+        # File handler (DEBUG level)
+        logs_dir = Path("logs")
+        logs_dir.mkdir(exist_ok=True)
+
+        # Create a new log file for each run with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_file = logs_dir / f"code_review_{timestamp}.log"
+
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(detailed_formatter)
+        logger.addHandler(file_handler)
+
+    return logger

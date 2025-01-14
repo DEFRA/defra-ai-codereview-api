@@ -1,7 +1,7 @@
 """Configuration management for the application."""
 from pydantic_settings import BaseSettings
-from typing import Literal
-from pydantic import ConfigDict
+from typing import Literal, List
+from pydantic import ConfigDict, Field
 
 class Settings(BaseSettings):
     """Application settings."""
@@ -9,6 +9,10 @@ class Settings(BaseSettings):
     MONGO_URI: str
     ANTHROPIC_API_KEY: str
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+    
+    # Feature flags
+    LLM_TESTING: bool = False
+    LLM_TESTING_STANDARDS_FILES: str = ""
     
     # MongoDB Docker settings (optional with defaults)
     MONGO_INITDB_ROOT_USERNAME: str = "root"

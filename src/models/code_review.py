@@ -7,11 +7,14 @@ from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import CoreSchema, core_schema
 from bson import ObjectId
 
+
 class ReviewStatus(str, Enum):
     """Status of a code review."""
     STARTED = "started"
+    IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     FAILED = "failed"
+
 
 class PyObjectId(str):
     """Custom type for handling MongoDB ObjectIds."""
@@ -50,15 +53,18 @@ class PyObjectId(str):
         """Return the JSON Schema for this type."""
         return {"type": "string", "pattern": "^[0-9a-fA-F]{24}$"}
 
+
 class CodeReviewCreate(BaseModel):
     """Input model for creating a code review."""
     repository_url: str
+
 
 class CodeReview(BaseModel):
     """CodeReview model for responses."""
     id: PyObjectId = Field(default_factory=PyObjectId, alias='_id')
     repository_url: str
     status: ReviewStatus = ReviewStatus.STARTED
+    compliance_report: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
@@ -66,4 +72,4 @@ class CodeReview(BaseModel):
         populate_by_name=True,
         json_encoders={ObjectId: str},
         arbitrary_types_allowed=True
-    ) 
+    )
