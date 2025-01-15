@@ -47,16 +47,7 @@ Relevant Files/Sections:
 
 ## [Standard Category 2]
 
-Compliant: [Yes/No/Partially]
-
-Relevant Files/Sections:
-- [file/path/1]
-- [file/path/2]
-
-[Describe how the codebase implements or fails to implement this standard - keep this informative and concise]
-[If partially compliant or non-compliant, explain specific issues - keep this informative and concise]
-
-[Repeat for each standard category.]
+[...repeat format for each standard...]
 
 ## Specific Recommendations
 
@@ -117,9 +108,16 @@ async def check_compliance(codebase_file: Path, standards_files: List[Path]) -> 
                 messages=[{"role": "user", "content": user_prompt}]
             )
 
+            # Format the standard name by:
+            # 1. Remove all extensions (.md and .txt)
+            # 2. Replace underscores with spaces
+            # 3. Title case each word
+            standard_name = standard_file.stem.split(
+                '.')[0].replace('_', ' ').title()
+
             # Append this response to the report file immediately
-            standard_section = f"\n## Standard: {
-                standard_file.name}\n\n{response.content[0].text}\n"
+            standard_section = f"\n# {standard_name}\n\n{
+                response.content[0].text}\n"
             with open(report_path, 'a', encoding='utf-8') as f:
                 f.write(standard_section)
 
@@ -127,8 +125,10 @@ async def check_compliance(codebase_file: Path, standards_files: List[Path]) -> 
             final_report += standard_section
 
         except Exception as e:
-            error_message = f"\n## Standard: {
-                standard_file.name}\n\nError processing standard: {str(e)}\n"
+            standard_name = standard_file.stem.split(
+                '.')[0].replace('_', ' ').title()
+            error_message = f"\n# {
+                standard_name}\n\nError processing standard: {str(e)}\n"
             logger.error(f"Error processing standard {
                          standard_file}: {str(e)}")
 
