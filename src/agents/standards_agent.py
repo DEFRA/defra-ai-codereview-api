@@ -34,9 +34,12 @@ Generate a informative but concise compliance report that includes:
 
 Below is a example of the report format (Replace all text in [brackets] with actual content - don't leave the square brackets in the final report):
 
+Replace the <span style="color: [COLOUR]"> with the appropriate hash code of the colour for the compliance status detailed below.
+Yes = #00703c, No = #d4351c, Partially = #1d70b8
+
 ## [Standard Category 1]
 
-Compliant: **[Yes/No/Partially]**
+Compliant: <span style="color: [COLOUR]">**[Yes/No/Partially]**</span>
 
 Relevant Files/Sections:
 - [file/path/1]
