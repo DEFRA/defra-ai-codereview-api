@@ -117,7 +117,7 @@ async def check_compliance(codebase_file: Path, standards_files: List[Path]) -> 
 
             # Append this response to the report file immediately
             standard_section = f"\n# {standard_name}\n\n{
-                response.content[0].text}\n"
+                response.content[0].text}\n\n---\n\n"
             with open(report_path, 'a', encoding='utf-8') as f:
                 f.write(standard_section)
 
