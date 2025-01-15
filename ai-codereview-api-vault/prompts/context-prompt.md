@@ -1,0 +1,1 @@
+look at the whole codebase and write a few paragraphs as background context for a prd on the current state of this code base. include technologies used and current functionality.
