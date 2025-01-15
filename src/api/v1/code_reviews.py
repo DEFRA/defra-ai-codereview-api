@@ -3,13 +3,18 @@ from fastapi import APIRouter, HTTPException, status, BackgroundTasks
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from bson import ObjectId
 from typing import List
-from datetime import datetime, UTC
-from src.models.code_review import CodeReview, CodeReviewCreate, ReviewStatus
+from datetime import datetime
+from bson import ObjectId
+from fastapi import APIRouter, HTTPException
 from src.database import get_database
+from src.models.code_review import CodeReview, CodeReviewCreate, ReviewStatus
 from src.logging_config import setup_logger
 from src.agents.git_repos_agent import process_repositories
 from src.agents.standards_agent import check_compliance
+from multiprocessing import Process
+from datetime import timezone
 
+UTC = timezone.utc
 logger = setup_logger(__name__)
 
 router = APIRouter()
@@ -57,13 +62,27 @@ async def process_code_review(review_id: str, repository_url: str):
         )
 
 
+def run_agent_process(review_id: str, repository_url: str):
+    """Run the agent process in a separate process."""
+    import asyncio
+
+    async def _run():
+        try:
+            db = await get_database()
+            await process_code_review(review_id, repository_url)
+        except Exception as e:
+            logger.error(f"Error in agent process: {str(e)}", exc_info=True)
+
+    asyncio.run(_run())
+
+
 @router.post("/code-reviews", response_model=CodeReview, status_code=status.HTTP_201_CREATED,
              description="Create a new code review",
              responses={
                  201: {"description": "Code review created successfully"},
                  400: {"description": "Invalid input"}
              })
-async def create_code_review(code_review: CodeReviewCreate, background_tasks: BackgroundTasks):
+async def create_code_review(code_review: CodeReviewCreate):
     """Create a new code review."""
     logger.info(f"Creating code review for repository: {
                 code_review.repository_url}")
@@ -80,12 +99,11 @@ async def create_code_review(code_review: CodeReviewCreate, background_tasks: Ba
         result = await db.code_reviews.insert_one(review_dict)
         logger.debug(f"Insert result: {result.inserted_id}")
 
-        # Add background task
-        background_tasks.add_task(
-            process_code_review,
-            str(result.inserted_id),
-            code_review.repository_url
-        )
+        # Start agent in separate process
+        Process(
+            target=run_agent_process,
+            args=(str(result.inserted_id), code_review.repository_url)
+        ).start()
 
         # Fetch the created document
         created_review = await db.code_reviews.find_one({"_id": result.inserted_id})
@@ -106,7 +124,7 @@ async def get_code_reviews():
     try:
         db = await get_database()
         logger.debug("Fetching all code reviews")
-        reviews = await db.code_reviews.find().to_list(None)
+        reviews = await db.code_reviews.find().sort("updated_at", -1).to_list(None)
         logger.debug(f"Found {len(reviews)} code reviews")
 
         # Filter out invalid documents and convert _id to string
