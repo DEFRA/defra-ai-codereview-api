@@ -65,14 +65,14 @@ async def process_code_review(review_id: str, repository_url: str):
 def run_agent_process(review_id: str, repository_url: str):
     """Run the agent process in a separate process."""
     import asyncio
-    
+
     async def _run():
         try:
             db = await get_database()
             await process_code_review(review_id, repository_url)
         except Exception as e:
             logger.error(f"Error in agent process: {str(e)}", exc_info=True)
-    
+
     asyncio.run(_run())
 
 
@@ -124,7 +124,7 @@ async def get_code_reviews():
     try:
         db = await get_database()
         logger.debug("Fetching all code reviews")
-        reviews = await db.code_reviews.find().to_list(None)
+        reviews = await db.code_reviews.find().sort("updated_at", -1).to_list(None)
         logger.debug(f"Found {len(reviews)} code reviews")
 
         # Filter out invalid documents and convert _id to string
