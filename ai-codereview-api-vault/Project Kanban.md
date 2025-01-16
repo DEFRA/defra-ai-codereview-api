@@ -6,6 +6,7 @@ kanban-plugin: board
 
 ## To Do
 
+- [ ] extend dependency.py injection file for the existing code review?
 - [ ] refactor to have an array of reports, currently hard-coded (poc / demos)
 - [ ] generate report with name using id
 - [ ] add e2e tests in playwright
