@@ -15,7 +15,7 @@ load_dotenv(".env.test", override=True)
 
 import asyncio
 from typing import AsyncGenerator, Generator
-from unittest.mock import AsyncMock
+from unittest.mock import patch
 
 import pytest
 from fastapi import FastAPI
@@ -25,27 +25,34 @@ from mongomock_motor import AsyncMongoMockClient
 from src.main import app
 from src.config import settings
 from src.database import get_database
+from src.dependencies import get_classifications_collection, get_repository
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 async def mock_mongodb() -> AsyncGenerator[AsyncMongoMockClient, None]:
-    """Create a mock MongoDB client."""
+    """Create a mock MongoDB client for testing."""
     mock_client = AsyncMongoMockClient()
     mock_db = mock_client[f"{settings.MONGO_INITDB_DATABASE}_test"]
-    yield mock_db
-    await mock_client.drop_database(f"{settings.MONGO_INITDB_DATABASE}_test")
+    
+    # Override all database access points
+    app.dependency_overrides[get_database] = lambda: mock_db
+    app.dependency_overrides[get_classifications_collection] = lambda: mock_db.classifications
+    app.dependency_overrides[get_repository] = lambda: ClassificationRepository(mock_db.classifications)
+    
+    # Also patch the global database connection
+    with patch('src.database.db', mock_db):
+        yield mock_db
+    
+    # Clean up
+    await mock_client.drop_database(settings.MONGO_INITDB_DATABASE)
+    app.dependency_overrides.clear()
     mock_client.close()
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 async def test_app(mock_mongodb) -> AsyncGenerator[FastAPI, None]:
     """Create a test instance of the FastAPI application with mocked MongoDB."""
-    async def mock_get_database():
-        return mock_mongodb
-    
-    app.dependency_overrides[get_database] = mock_get_database
     yield app
-    app.dependency_overrides.clear()
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def test_client(test_app: FastAPI) -> Generator[TestClient, None, None]:
     """Create a test client for making HTTP requests."""
     with TestClient(test_app) as client:

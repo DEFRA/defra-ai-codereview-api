@@ -1,5 +1,5 @@
 """Classification API endpoints."""
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, status
 from motor.motor_asyncio import AsyncIOMotorCollection
 from typing import List
 from bson.errors import InvalidId
@@ -19,7 +19,9 @@ async def get_repository(
     """Get classification repository instance."""
     return ClassificationRepository(collection)
 
-@router.post("/classifications", response_model=Classification,
+@router.post("/classifications", 
+         response_model=Classification,
+         status_code=status.HTTP_201_CREATED,
          description="Create a new classification",
          responses={
              201: {"description": "Classification created successfully"},
@@ -30,9 +32,17 @@ async def create_classification(
     repo: ClassificationRepository = Depends(get_repository)
 ):
     """Create a new classification."""
-    return await repo.create(classification)
+    try:
+        return await repo.create(classification)
+    except Exception as e:
+        logger.error(f"Error creating classification: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
 
-@router.get("/classifications", response_model=List[Classification],
+@router.get("/classifications", 
+        response_model=List[Classification],
         description="Get all classifications",
         responses={
             200: {"description": "List of all classifications"}
@@ -41,14 +51,21 @@ async def list_classifications(
     repo: ClassificationRepository = Depends(get_repository)
 ):
     """Get all classifications."""
-    return await repo.get_all()
+    try:
+        return await repo.get_all()
+    except Exception as e:
+        logger.error(f"Error listing classifications: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve classifications"
+        )
 
 @router.delete("/classifications/{id}",
            description="Delete a classification",
            responses={
                200: {"description": "Classification deleted successfully"},
                404: {"description": "Classification not found"},
-               400: {"description": "Invalid classification ID format"}
+               400: {"description": "Invalid ObjectId format"}
            })
 async def delete_classification(
     id: str,
@@ -58,7 +75,26 @@ async def delete_classification(
     try:
         deleted = await repo.delete(id)
         if not deleted:
-            raise HTTPException(status_code=404, detail="Classification not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Classification not found"
+            )
         return {"status": "success"}
-    except InvalidId:
-        raise HTTPException(status_code=400, detail="Invalid ObjectId format") 
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid ObjectId format"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting classification: {str(e)}")
+        if "Classification not found" in str(e):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Classification not found"
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete classification"
+        ) 
