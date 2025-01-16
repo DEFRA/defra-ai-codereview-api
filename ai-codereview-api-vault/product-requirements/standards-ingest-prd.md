@@ -38,10 +38,9 @@ Currently, the system is configured with a **hard-coded** set of standards.
 * **Rendering**: Nunjucks templating, server-side rendering
 * **Tooling**: Webpack, Babel, TypeScript, Jest, ESLint, Prettier
 * **Current Features**:
-  * A home page for repository submission
-  * Health check endpoints
-  * Error handling pages
-  * Basic routing for future expansion
+  * A page for submission of code reviews
+  * A page for viewing all previous code views
+  * A page for viewing code view details
 
 ## 3. Problem Statement & Goals
 
@@ -77,8 +76,8 @@ Currently, the system is configured with a **hard-coded** set of standards.
 
 4. **Frontend Enhancements**
    * New pages to manage standard sets and classifications
-   * Modified home page to show multiple standard sets for selection
-   * Code review detail pages that tabulate reports by standard set
+   * Modified submission page to show multiple standard sets for selection
+   * Modified code review detail pages with tabs for each report by standard set
 
 ## 5. Detailed Requirements
 
@@ -116,10 +115,10 @@ Currently, the system is configured with a **hard-coded** set of standards.
 #### 5.1.2 Frontend Requirements
 1. **New Navigation Item**: "Manage Classifications"
 2. **Manage Classifications Page**
-   * **List** all existing classifications (table view)
-   * **Add** a new classification (form that calls `POST /api/v1/classifications`)
-   * **Delete** a classification (action that calls `DELETE /api/v1/classifications/{id}`)
-   * Show a **warning** message that adding or deleting classifications requires re-ingestion of existing standard sets to update classificationging relationships
+   * **List** all existing classifications (table view) (calls API `GET /api/v1/classifications` on load)
+   * **Add** a new classification (form that calls API `POST /api/v1/classifications`)
+   * **Delete** a classification (action that calls API `DELETE /api/v1/classifications/{id}`)
+   * Show a **warning** message that adding or deleting classifications requires re-ingestion of existing standard sets to update classification relationships
 
 #### 5.1.3 Example Classifications
 ```
@@ -213,31 +212,35 @@ Python, C#, Node.js, JavaScript, Java, .NET
 ## 6. Frontend Requirements
 
 ### 6.1 Navigation
-* **Manage classifications**: New item linking to `/classifications`
-* **Manage standards**: New item linking to `/standard-sets`
+* **Manage standards**:  New item linking to `/standards`
+
+### 6.1 Standards Landing Page
+* A standards landing page that contains links to: 
+* ** Manage classifications**: text linking to `/standards/classifications`
+* **Manage standards**: text linking to `/standards/standard-sets`
 
 ### 6.2 Classification Manager Pages
-* **Manage Classifications Page (`/classifications`)**
-  * Display a **table** of all classifications from `GET /api/v1/classifications`
-	  * **Delete Classification** button for each row of the table (DELETE to `/api/v1/classifications/{id}`)
-  * **Add Classification** form (POST to `/api/v1/classifications`)
+* **Manage Classifications Page (`/standards/classifications`)**
+  * Display a **table** of all classifications - calls API`GET /api/v1/classifications`
+  * **Delete Classification** button for each row of the table - calls API DELETE to `/api/v1/classifications/{id}`
+  * **Add Classification** form - calls API POST to `/api/v1/classifications`
   * Display **warning** about re-ingestion for changes in classifications
 
-### 6.3 Standards Management
+### 6.3 Standards Sets Management
 
-1. **Manage Standards Page (`/standard-sets`)**
-   * Display a **table** of all standard-sets (from `GET /api/v1/standard-sets`)
+1. **Manage Standards Page (`/standards/standard-sets`)**
+   * Display a **table** of all standard-sets (calls API `GET /api/v1/standard-sets`)
      * Columns: Standard-Set Name, Repository URL (opens in new tab), Delete button
-     * **Delete** calls `DELETE /api/v1/standard-sets/{id}`
-   * **Add New Standard-Set** button -> `/standard-sets/new`
+     * **Delete** calls API `DELETE /api/v1/standard-sets/{id}`
+   * **Add New Standard-Set** button -> `/standards/standard-sets/new`
 
-2. **Add New Standard-Set Page (`/standard-sets/new`)**
+2. **Add New Standard-Set Page (`/standards/standard-sets/new`)**
    * Form fields: `name`, `repository_url`, `custom_prompt`
-   * On submit, **POST** to `/api/v1/standard-sets`
-   * If success, **redirect** to `/standard-sets/{id}` (the detail page)
+   * On submit, calls API  `POST /api/v1/standard-sets`
+   * If success, **redirect** to `/standards/standard-sets/{id}` (the standards detail page)
 
-3. **Standard Set Detail Page (`/standard-sets/{id}`)**
-   * Query **GET** `/api/v1/standard-sets/{id}` on page load
+3. **Standard Set Detail Page (`/standards/standard-sets/{id}`)**
+   * Call API **GET** `/api/v1/standard-sets/{id}` on page load
    * Show:
      * Standard-Set Name
      * Repository URL (open in new tab)
@@ -247,20 +250,21 @@ Python, C#, Node.js, JavaScript, Java, .NET
        * Standard Text
        * Comma-separated list of classifications
        * Repository Path (opens in new tab if relevant)
+       * Classifications 
 
-### 6.4 Home Page Updates
+### 6.4 Standards Submission Updates
 * **Standard-Sets Checkbox List**
-  * Dynamically fetched from `GET /api/v1/standard-sets`
+  * The values are dynamically generated, using the fetched from `GET /api/v1/standard-sets`
   * The user can select one or more sets to include in their code review request
-  * The form then sends an array of standard-set IDs with `repository_url` to `POST /api/v1/code-reviews`
+  * The form then sends an array of standard-set IDs with `repository_url` to API `POST /api/v1/code-reviews`
   * Add a 'check all' link that checks all the standard-sets to be included in the code review
 
 ### 6.5 Code Review Record Detail Page Updates
 * **Reports Array**
   * Each code review can now have multiple standard-set reports
-  * Show the list of standard-sets used for that review in the details section
-  * Populate the existing **tabbed interface** or separate tabs for each standard-set's Markdown result
+  * Populate the existing **tabbed interface** dynamically using the new `standard_sets array` from the existing API `GET /api/v1/code-reviews/${id}`
   * Each tab title corresponds to the standard-set name
+  * The content of the tab shows the Markdown reports generated for the corresponding each standard-set
 
 ## 7. Data Model & ER Diagram (Conceptual)
 
