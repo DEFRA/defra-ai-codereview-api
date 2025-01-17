@@ -168,6 +168,59 @@ async def test_process_standards_repo_handles_corrupt_files(mock_temp_dir):
         assert len(result) == 0
 
 @pytest.mark.asyncio
+async def test_process_standards_repo_skips_git_directory(mock_temp_dir):
+    """
+    Test standards processing skips .git directory.
+    
+    Given: A standards repository with a file in .git directory
+    When: Processing standards repository
+    Then: Should skip files in .git directory
+    """
+    # Given
+    with patch('src.agents.git_repos_agent.settings') as mock_settings:
+        mock_settings.LLM_TESTING = False
+        
+        # Create .git directory with a file
+        git_dir = mock_temp_dir / ".git"
+        git_dir.mkdir()
+        git_file = git_dir / "test_standards.md"
+        git_file.write_text("Test standards in git")
+        
+        # When
+        result = await process_standards_repo(mock_temp_dir)
+        
+        # Then
+        assert len(result) == 0
+
+@pytest.mark.asyncio
+async def test_process_standards_repo_skips_invalid_suffixes(mock_temp_dir):
+    """
+    Test standards processing skips files with invalid suffixes.
+    
+    Given: A standards repository with files having invalid suffixes
+    When: Processing standards repository
+    Then: Should skip files without _principles.md or _standards.md suffix
+    """
+    # Given
+    with patch('src.agents.git_repos_agent.settings') as mock_settings:
+        mock_settings.LLM_TESTING = False
+        
+        # Create file with invalid suffix
+        invalid_file = mock_temp_dir / "test_invalid.md"
+        invalid_file.write_text("Test invalid suffix")
+        
+        # Create file with valid suffix for comparison
+        valid_file = mock_temp_dir / "test_standards.md"
+        valid_file.write_text("Test valid suffix")
+        
+        # When
+        result = await process_standards_repo(mock_temp_dir)
+        
+        # Then
+        assert len(result) == 1
+        assert "test_standards.md" in str(result[0])
+
+@pytest.mark.asyncio
 async def test_clone_repo_clones_successfully():
     """
     Test successful repository cloning.

@@ -12,6 +12,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from mongomock_motor import AsyncMongoMockClient
 from src.models.code_review import ReviewStatus
+from bson import ObjectId
+import asyncio
+from unittest.mock import MagicMock
+from unittest.mock import AsyncMock
 
 
 @pytest.mark.asyncio
@@ -248,3 +252,69 @@ async def test_process_code_review_handles_compliance_check_errors(
     updated_review = await mock_mongodb.code_reviews.find_one({"_id": result.inserted_id})
     assert updated_review["status"] == ReviewStatus.FAILED
     assert "updated_at" in updated_review 
+
+
+def test_run_agent_process_handles_errors():
+    """
+    Test error handling in run_agent_process.
+    
+    Given: A process that encounters an error
+    When: Running the agent process
+    Then: Should handle the error gracefully and log it
+    """
+    from src.api.v1.code_reviews import run_agent_process
+    
+    # Given
+    review_id = str(ObjectId())
+    repo_url = "https://github.com/example/repo"
+    
+    # When/Then
+    with patch('src.api.v1.code_reviews.process_code_review') as mock_process, \
+         patch('src.api.v1.code_reviews.logger') as mock_logger, \
+         patch('asyncio.new_event_loop') as mock_loop:
+        
+        # Setup mock event loop
+        mock_loop.return_value = MagicMock()
+        mock_process.side_effect = Exception("Test error")
+        
+        # Run the process
+        run_agent_process(review_id, repo_url)
+        
+        # Verify error was logged
+        mock_logger.error.assert_called_once()
+        assert "Error in agent process" in mock_logger.error.call_args[0][0]
+
+
+def test_run_agent_process_executes_successfully():
+    """
+    Test successful execution of run_agent_process.
+    
+    Given: A valid review ID and repository URL
+    When: Running the agent process
+    Then: Should process the code review without errors
+    """
+    from src.api.v1.code_reviews import run_agent_process
+    import asyncio
+    
+    # Given
+    review_id = str(ObjectId())
+    repo_url = "https://github.com/example/repo"
+    
+    # When/Then
+    with patch('src.api.v1.code_reviews.process_code_review', new_callable=AsyncMock) as mock_process, \
+         patch('src.database.get_database', new_callable=AsyncMock) as mock_db:
+        
+        # Setup the mock to actually run the coroutine
+        def mock_run(coro):
+            loop = asyncio.new_event_loop()
+            try:
+                return loop.run_until_complete(coro)
+            finally:
+                loop.close()
+        
+        with patch('asyncio.run', side_effect=mock_run):
+            # Run the process
+            run_agent_process(review_id, repo_url)
+            
+            # Verify process_code_review was called with correct arguments
+            mock_process.assert_called_once_with(review_id, repo_url) 
