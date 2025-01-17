@@ -7,18 +7,17 @@ kanban-plugin: board
 ## To Do
 
 - [ ] extend dependency.py injection file for the existing code review?
-- [ ] refactor to have an array of reports, currently hard-coded (poc / demos)
-- [ ] generate report with name using id
-- [ ] add e2e tests in playwright
 - [ ] Future iteration - logging_config - only write to logfile when running locally, not in aws envs
-- [ ] Tag standards and store them in mongo. Use the tags to only find relevant standards (Todds diagram)
-- [ ] Future feature for standards ingest - other sources standards
 - [ ] Spike - "Graph RAG" for large codebases?
+	- is there a way we can save tokens
 - [ ] refactor async def check_compliance() as its HUGE
+- [ ] Hooks: Linting, formatting, commit hooks for python api backend
+		- pylint --rcfile=/path/to/.pylintrc src tests
 
 
 ## Doing
 
+- [ ] [[standards-ingest-prd]]
 
 
 ## Done
