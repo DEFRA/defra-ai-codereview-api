@@ -1,0 +1,5 @@
+Let's impliment feature '5.2 Standards Ingest' from the @standards-ingest-prd.md . Also reference section '## 8. Database Schema for Classification System Using References' to understand the relationships for the data model better before developing. Please refernce the entire codebase, but especially follow the pattern of the @classifications.py system, including the @classification_repo.py and @classification.py design parttern for the the new endpoint. Make sure you add the endpoints to the fastapi main router. Also reference the integraiton test patterns in @integration to test the endpoints. Note that for this first iteration we only want to impliment the following for the **POST** `/api/v1/standard-sets` endpoint, as we will add in the ingest process later:  
+1. Check if a standard-set with the same `name` exists. If so, delete the existing one and all its associated standards  
+2. Create a new standard-set record  
+... skip inbetween steps ...  
+7. Return newly created standard-set with its `_id`
