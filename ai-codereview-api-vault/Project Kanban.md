@@ -13,6 +13,7 @@ kanban-plugin: board
 - [ ] refactor async def check_compliance() as its HUGE
 - [ ] Hooks: Linting, formatting, commit hooks for python api backend
 		- pylint --rcfile=/path/to/.pylintrc src tests
+- [ ] Check out the errors.py file and how error type handling works
 
 
 ## Doing
