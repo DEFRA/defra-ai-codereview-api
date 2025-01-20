@@ -13,6 +13,7 @@ from src.agents.git_repos_agent import process_repositories
 from src.agents.code_reviews_agent import check_compliance
 from multiprocessing import Process
 from datetime import timezone
+import os
 
 UTC = timezone.utc
 logger = setup_logger(__name__)
@@ -20,7 +21,7 @@ logger = setup_logger(__name__)
 router = APIRouter()
 
 
-async def process_code_review(review_id: str, repository_url: str):
+async def process_code_review(review_id: str, repository_url: str, standard_sets: list[str]):
     """Process a code review in the background."""
     try:
         db = await get_database()
@@ -34,25 +35,45 @@ async def process_code_review(review_id: str, repository_url: str):
             }}
         )
 
-        # Process repositories
-        codebase_file, standards_files = await process_repositories(repository_url)
+        # Process repository
+        codebase_file = await process_repositories(repository_url)
+        
+        # Get standards from database for each standard set
+        compliance_reports = {}
+        for standard_set_id in standard_sets:
+            try:
+                # Get standard set from database
+                standard_set = await db.standard_sets.find_one({"_id": ObjectId(standard_set_id)})
+                if not standard_set:
+                    logger.error(f"Standard set {standard_set_id} not found")
+                    continue
+                
+                # Get standards for this set
+                standards = await db.standards.find({"standard_set_id": standard_set_id}).to_list(None)
+                if not standards:
+                    logger.error(f"No standards found for standard set {standard_set_id}")
+                    continue
 
-        # Check compliance
-        compliance_report = await check_compliance(codebase_file, standards_files)
+                # Check compliance
+                report_file = await check_compliance(codebase_file, standards, review_id, standard_set["name"])
+                compliance_reports[standard_set_id] = str(report_file)
+
+            except Exception as e:
+                logger.error(f"Error processing standard set {standard_set_id}: {str(e)}")
+                continue
 
         # Update review with results
         await db.code_reviews.update_one(
             {"_id": ObjectId(review_id)},
             {"$set": {
                 "status": ReviewStatus.COMPLETED,
-                "compliance_report": compliance_report,
+                "compliance_reports": compliance_reports,
                 "updated_at": datetime.now(UTC)
             }}
         )
 
     except Exception as e:
-        logger.error(f"Error processing code review: {str(e)}", exc_info=True)
-        # Update review status to failed
+        logger.error(f"Error processing code review {review_id}: {str(e)}")
         await db.code_reviews.update_one(
             {"_id": ObjectId(review_id)},
             {"$set": {
@@ -62,14 +83,14 @@ async def process_code_review(review_id: str, repository_url: str):
         )
 
 
-def run_agent_process(review_id: str, repository_url: str):
+def run_agent_process(review_id: str, repository_url: str, standard_sets: list[str]):
     """Run the agent process in a separate process."""
     import asyncio
 
     async def _run():
         try:
             db = await get_database()
-            await process_code_review(review_id, repository_url)
+            await process_code_review(review_id, repository_url, standard_sets)
         except Exception as e:
             logger.error(f"Error in agent process: {str(e)}", exc_info=True)
 
@@ -84,14 +105,15 @@ def run_agent_process(review_id: str, repository_url: str):
              })
 async def create_code_review(code_review: CodeReviewCreate):
     """Create a new code review."""
-    logger.info(f"Creating code review for repository: {
-                code_review.repository_url}")
+    logger.info(f"Creating code review for repository: {code_review.repository_url}")
     try:
         db = await get_database()
-        # Create initial document without _id
+        # Create initial document
         review_dict = {
             "repository_url": code_review.repository_url,
+            "standard_sets": code_review.standard_sets,
             "status": ReviewStatus.STARTED,
+            "compliance_reports": {},
             "created_at": datetime.now(UTC),
             "updated_at": datetime.now(UTC)
         }
@@ -102,15 +124,14 @@ async def create_code_review(code_review: CodeReviewCreate):
         # Start agent in separate process
         Process(
             target=run_agent_process,
-            args=(str(result.inserted_id), code_review.repository_url)
+            args=(str(result.inserted_id), code_review.repository_url, code_review.standard_sets)
         ).start()
 
         # Fetch the created document
         created_review = await db.code_reviews.find_one({"_id": result.inserted_id})
         logger.debug(f"Created review document: {created_review}")
 
-        logger.info(f"Successfully created code review with ID: {
-                    result.inserted_id}")
+        logger.info(f"Successfully created code review with ID: {result.inserted_id}")
         return CodeReview(**created_review)
     except Exception as e:
         logger.error(f"Error creating code review: {str(e)}", exc_info=True)
@@ -166,8 +187,7 @@ async def get_code_review(_id: str):
         logger.debug(f"Total documents in collection: {total}")
         if total > 0:
             docs = await db.code_reviews.find().limit(5).to_list(None)
-            logger.debug(f"Sample document IDs: {
-                         [str(doc['_id']) for doc in docs]}")
+            logger.debug(f"Sample document IDs: {[str(doc['_id']) for doc in docs]}")
             # Log complete structure of matching document if it exists
             matching_doc = next(
                 (doc for doc in docs if str(doc['_id']) == _id), None)

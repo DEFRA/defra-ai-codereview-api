@@ -2,7 +2,7 @@
 import os
 from pathlib import Path
 from typing import List
-from anthropic import Anthropic
+from anthropic import AsyncAnthropic
 from src.logging_config import setup_logger
 
 logger = setup_logger(__name__)
@@ -14,10 +14,13 @@ Provide detailed recommendations for non-compliant areas.
 Consider the codebase as a whole when evaluating compliance."""
 
 
-async def generate_user_prompt(standard_content: str, codebase_content: str) -> str:
+async def generate_user_prompt(standards: List[dict], codebase_content: str) -> str:
     """Generate the user prompt for the Anthropic model."""
+    # Combine all standards into a single string
+    standards_content = "\n\n".join([f"## Standard {std['_id']}\n{std['text']}" for std in standards])
+    
     prompt = f"""Given the set of standards below:
-{standard_content}
+{standards_content}
 
 Compare the entire codebase of the submitted repository below, to assess how well the relevant standards are adhered to:
 {codebase_content}
@@ -65,82 +68,41 @@ Relevant Files/Sections:
     return prompt
 
 
-async def check_compliance(codebase_file: Path, standards_files: List[Path]) -> str:
+async def check_compliance(codebase_file: Path, standards: List[dict], review_id: str, standard_set_name: str) -> Path:
     """Check codebase compliance against standards using Anthropic's Claude."""
-    logger.info("Starting compliance check")
+    try:
+        # Read codebase content
+        with open(codebase_file, 'r', encoding='utf-8') as f:
+            codebase_content = f.read()
+        logger.debug(f"Codebase content length: {len(codebase_content)} characters")
 
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise ValueError("ANTHROPIC_API_KEY environment variable is not set")
+        # Generate prompt
+        prompt = await generate_user_prompt(standards, codebase_content)
+        logger.debug(f"Generated prompt word count: {len(prompt.split())}")
 
-    client = Anthropic(api_key=api_key)
-    model = "claude-3-5-sonnet-20241022"
+        # Get Anthropic client
+        anthropic = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
-    # Read codebase content
-    with open(codebase_file, 'r', encoding='utf-8') as f:
-        codebase_content = f.read()
-        logger.debug(f"Codebase content length: {
-                     len(codebase_content)} characters")
+        # Call Claude for analysis
+        logger.info("Starting compliance check")
+        message = await anthropic.messages.create(
+            model="claude-3-sonnet-20240229",
+            max_tokens=4000,
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": prompt}]
+        )
 
-    # Initialize the report file
-    report_path = Path("data") / "compliance_report.md"
-    with open(report_path, 'w', encoding='utf-8') as f:
-        f.write("# Code Compliance Report\n\n")
+        report = message.content[0].text
+        logger.debug(f"Generated report length: {len(report)} characters")
 
-    final_report = ""
+        # Save report to file using required format: {code-review-record-id}-{standard-set-name}.md
+        report_file = codebase_file.parent / f"{review_id}-{standard_set_name}.md"
+        with open(report_file, 'w', encoding='utf-8') as f:
+            f.write(report)
 
-    # Process each standard
-    for standard_file in standards_files:
-        logger.debug(f"Processing standard: {standard_file}")
+        logger.info(f"Completed compliance check for standard set '{standard_set_name}', report saved to {report_file}")
+        return report_file
 
-        with open(standard_file, 'r', encoding='utf-8') as f:
-            standard_content = f.read()
-            logger.debug(f"Standard content length: {
-                         len(standard_content)} characters")
-
-        user_prompt = await generate_user_prompt(standard_content, codebase_content)
-
-        try:
-            logger.debug("Sending request to Anthropic API")
-
-            response = client.messages.create(
-                model=model,
-                max_tokens=4096,
-                temperature=0,
-                system=SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": user_prompt}]
-            )
-
-            # Format the standard name by:
-            # 1. Remove all extensions (.md and .txt)
-            # 2. Replace underscores with spaces
-            # 3. Title case each word
-            standard_name = standard_file.stem.split(
-                '.')[0].replace('_', ' ').title()
-
-            # Append this response to the report file immediately
-            standard_section = f"\n# {standard_name}\n\n{
-                response.content[0].text}\n\n---\n\n"
-            with open(report_path, 'a', encoding='utf-8') as f:
-                f.write(standard_section)
-
-            # Also keep track of the content for the return value
-            final_report += standard_section
-
-        except Exception as e:
-            standard_name = standard_file.stem.split(
-                '.')[0].replace('_', ' ').title()
-            error_message = f"\n# {
-                standard_name}\n\nError processing standard: {str(e)}\n"
-            logger.error(f"Error processing standard {
-                         standard_file}: {str(e)}")
-
-            # Append error to the report file immediately
-            with open(report_path, 'a', encoding='utf-8') as f:
-                f.write(error_message)
-
-            # Also keep track of the content for the return value
-            final_report += error_message
-
-    logger.info("Finished compliance check")
-    return final_report
+    except Exception as e:
+        logger.error(f"Error checking compliance: {str(e)}")
+        raise

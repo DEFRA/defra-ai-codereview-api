@@ -57,6 +57,7 @@ class PyObjectId(str):
 class CodeReviewCreate(BaseModel):
     """Input model for creating a code review."""
     repository_url: str
+    standard_sets: list[str] = Field(description="List of standard set IDs to check against")
 
 
 class CodeReview(BaseModel):
@@ -64,7 +65,8 @@ class CodeReview(BaseModel):
     id: PyObjectId = Field(default_factory=PyObjectId, alias='_id')
     repository_url: str
     status: ReviewStatus = ReviewStatus.STARTED
-    compliance_report: Optional[str] = None
+    standard_sets: list[str]
+    compliance_reports: dict[str, str] = Field(default_factory=dict, description="Map of standard set ID to report file path")
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 

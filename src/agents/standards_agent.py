@@ -35,6 +35,9 @@ async def process_standard_set(standard_set_id: str, repository_url: str):
         # Process standards
         await process_standards(db, repo, standard_set_id, classifications)
         
+        # Log completion
+        logger.info(f"Successfully processed standard set {standard_set_id}")
+        
         # Cleanup
         cleanup_repository(repo)
         logger.debug(f"Cleaned up repository at {repo}")
