@@ -74,7 +74,7 @@ async def check_compliance(codebase_file: Path, standards_files: List[Path]) -> 
         raise ValueError("ANTHROPIC_API_KEY environment variable is not set")
 
     client = Anthropic(api_key=api_key)
-    model = "claude-3-sonnet-20240229"
+    model = "claude-3-5-sonnet-20241022"
 
     # Read codebase content
     with open(codebase_file, 'r', encoding='utf-8') as f:

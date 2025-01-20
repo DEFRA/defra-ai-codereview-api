@@ -98,7 +98,7 @@ async def test_check_compliance_generates_report_on_success():
         # Verify API call
         mock_client.messages.create.assert_called_once()
         call_kwargs = mock_client.messages.create.call_args[1]
-        assert call_kwargs['model'] == "claude-3-sonnet-20240229"
+        assert call_kwargs['model'] == "claude-3-5-sonnet-20241022"
         assert call_kwargs['max_tokens'] == 4096
         assert call_kwargs['temperature'] == 0
         assert call_kwargs['system'] == SYSTEM_PROMPT

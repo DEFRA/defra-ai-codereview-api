@@ -12,10 +12,24 @@ from src.logging_config import setup_logger
 from src.repositories.errors import DatabaseError, RepositoryError
 from bson import ObjectId
 from bson.errors import InvalidId
+from multiprocessing import Process
 
 logger = setup_logger(__name__)
 
 router = APIRouter(prefix="/standard-sets", tags=["standard-sets"])
+
+def run_agent_process(standard_set_id: str, repository_url: str):
+    """Run the agent process in a separate process."""
+    import asyncio
+    from src.agents.standards_agent import process_standard_set
+
+    async def _run():
+        try:
+            await process_standard_set(standard_set_id, repository_url)
+        except Exception as e:
+            logger.error(f"Error in agent process: {str(e)}", exc_info=True)
+
+    asyncio.run(_run())
 
 @router.post("/", 
          response_model=StandardSet,
@@ -40,10 +54,18 @@ async def create_standard_set(
         
         if existing:
             # If it exists, update it instead of creating new
-            return await repo.update(standard_set)
+            standard_set_doc = await repo.update(standard_set)
+        else:
+            # If it doesn't exist, create new
+            standard_set_doc = await repo.create(standard_set)
+            
+        # Start agent in separate process
+        Process(
+            target=run_agent_process,
+            args=(str(standard_set_doc.id), standard_set.repository_url)
+        ).start()
         
-        # If it doesn't exist, create new
-        return await repo.create(standard_set)
+        return standard_set_doc
     except RepositoryError as e:
         if "validation" in str(e).lower() or "invalid" in str(e).lower():
             raise HTTPException(status_code=400, detail=str(e))
