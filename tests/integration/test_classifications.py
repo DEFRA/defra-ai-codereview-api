@@ -328,4 +328,34 @@ async def test_delete_classification_handles_not_found_error(
     # Then
     assert response.status_code == 404
     data = response.json()
-    assert "Classification not found" in data["detail"] 
+    assert "Classification not found" in data["detail"]
+
+
+@pytest.mark.asyncio
+async def test_create_classification_fails_with_duplicate_name(
+    test_client: TestClient,
+    mock_mongodb: AsyncMongoMockClient
+) -> None:
+    """
+    Test duplicate classification name validation.
+    
+    Given: An existing classification
+    When: Creating a new classification with the same name
+    Then: Response should be 400 with appropriate error message
+    """
+    # Given
+    test_classification = {
+        "name": "Python"
+    }
+    
+    # Create first classification
+    response = test_client.post("/api/v1/classifications", json=test_classification)
+    assert response.status_code == 201
+
+    # When - Try to create duplicate
+    response = test_client.post("/api/v1/classifications", json=test_classification)
+
+    # Then
+    assert response.status_code == 400
+    data = response.json()
+    assert "already exists" in data["detail"] 
