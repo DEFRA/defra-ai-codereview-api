@@ -14,6 +14,7 @@ kanban-plugin: board
 - [ ] Hooks: Linting, formatting, commit hooks for python api backend
 		- pylint --rcfile=/path/to/.pylintrc src tests
 - [ ] Check out the errors.py file and how error type handling works
+- [ ] pull out the anthropic model into the .env file
 
 
 ## Doing
