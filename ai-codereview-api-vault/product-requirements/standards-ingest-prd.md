@@ -126,7 +126,7 @@ Currently, the system is configured with a **hard-coded** set of standards.
 Python, C#, Node.js, JavaScript, Java, .NET
 ```
 
-### 5.2 Standards Ingest
+### 5.2 Standards Ingest (✅ Feature Completed)
 
 #### 5.2.1 Terminology
 * **Code Repository**: The repository to be reviewed
@@ -152,13 +152,16 @@ Python, C#, Node.js, JavaScript, Java, .NET
      * **POST** `/api/v1/standard-sets`
        1. Check if a standard-set with the same `name` exists. If so, delete the existing one and all its associated standards
        2. Create a new standard-set record
-       3. Download the repository from the provided `repository_url` to a temporary folder (note that we already have a `git_repos_agent` that can download a repository)
-       4. Parse each file in the repository using an LLM agent
-       5. For each discovered standard (could be multiple standards within a file), create a new record in the `standards` collection, associating it with the newly created standard-set
-         * Determine relevant classifications from the text (using LLM or other rules)
-         * If no classifications apply, the standard is universal
-       6. Cleanup temporary folder
-       7. Return newly created standard-set with its `_id`
+       3. Immediately return newly created standard-set with its `_id`
+       4. The following steps will be processed async.  (follow the same ' multiprocessing import Process' async approach we used for the /api/v1/code-reviews POST endpoint):
+	       4.1 Download the repository from the provided `repository_url` to a temporary folder (note that we already have a `git_repos_agent` that can download a repository)
+	       4.2 Get the full set of `classifications` from the database to use later during our standard analysis LLM call.
+	       4.3 Loop over each file in the repository and perform the following:
+		       1. Using an Anthropic LLM agent, look for individual standards within the files (could be multiple standards within each file) and determine relevant classifications from the text (classifications can be passed into the prompt from step 2 above)
+		       2. If no classifications apply, the standard is "universal" and can apply to any codebase.
+		       3. Make an assessment if the standard is "universal" or not before considering adding classifications, because if it's "universal", then no classifications are required.
+		       4. For each discovered standard, create a new record in the `standards` collection, associating it with the newly created standard-set
+	       4.4 Cleanup temporary folder where the standard-set repository was downloaded
      * **GET** `/api/v1/standard-sets`
        * Returns a list of standard-set objects (without their associated standards)
      * **GET** `/api/v1/standard-sets/{id}`
@@ -212,18 +215,18 @@ Python, C#, Node.js, JavaScript, Java, .NET
 
 ## 6. Frontend Requirements
 
-### 6.1 Navigation
+### 6.1 Navigation (✅ Feature Completed)
 * **Manage classifications**: New item linking to `/classifications`
 * **Manage standards**: New item linking to `/standard-sets`
 
-### 6.2 Classification Manager Pages
+### 6.2 Classification Manager Pages (✅ Feature Completed)
 * **Manage Classifications Page (`/classifications`)**
   * Display a **table** of all classifications from `GET /api/v1/classifications`
 	  * **Delete Classification** button for each row of the table (DELETE to `/api/v1/classifications/{id}`)
   * **Add Classification** form (POST to `/api/v1/classifications`)
   * Display **warning** about re-ingestion for changes in classifications
 
-### 6.3 Standards Management
+### 6.3 Standards Management (✅ Feature Completed)
 
 1. **Manage Standards Page (`/standard-sets`)**
    * Display a **table** of all standard-sets (from `GET /api/v1/standard-sets`)
