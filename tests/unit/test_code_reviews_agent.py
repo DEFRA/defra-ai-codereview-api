@@ -8,7 +8,7 @@ This module tests the core functionality for:
 import pytest
 from pathlib import Path
 from unittest.mock import patch, MagicMock, AsyncMock
-from src.agents.standards_agent import (
+from src.agents.code_reviews_agent import (
     generate_user_prompt,
     check_compliance,
     SYSTEM_PROMPT
@@ -82,7 +82,7 @@ async def test_check_compliance_generates_report_on_success():
     mock_client.messages.create.return_value = mock_response
     
     # When
-    with patch('src.agents.standards_agent.Anthropic', return_value=mock_client) as mock_anthropic, \
+    with patch('src.agents.code_reviews_agent.Anthropic', return_value=mock_client) as mock_anthropic, \
          patch('builtins.open', create=True) as mock_open, \
          patch('pathlib.Path.write_text') as mock_write, \
          patch.dict('os.environ', {'ANTHROPIC_API_KEY': 'test_key'}):
@@ -143,7 +143,7 @@ async def test_check_compliance_handles_api_errors():
     mock_client.messages.create.side_effect = Exception("API Error")
     
     # When
-    with patch('src.agents.standards_agent.Anthropic', return_value=mock_client) as mock_anthropic, \
+    with patch('src.agents.code_reviews_agent.Anthropic', return_value=mock_client) as mock_anthropic, \
          patch('builtins.open', create=True) as mock_open, \
          patch('pathlib.Path.write_text') as mock_write, \
          patch.dict('os.environ', {'ANTHROPIC_API_KEY': 'test_key'}):

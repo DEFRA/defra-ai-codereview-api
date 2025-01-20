@@ -10,7 +10,7 @@ from src.database import get_database
 from src.models.code_review import CodeReview, CodeReviewCreate, ReviewStatus
 from src.logging_config import setup_logger
 from src.agents.git_repos_agent import process_repositories
-from src.agents.standards_agent import check_compliance
+from src.agents.code_reviews_agent import check_compliance
 from multiprocessing import Process
 from datetime import timezone
 
@@ -172,8 +172,7 @@ async def get_code_review(_id: str):
             matching_doc = next(
                 (doc for doc in docs if str(doc['_id']) == _id), None)
             if matching_doc:
-                logger.debug(f"Found matching document in sample: {
-                             matching_doc}")
+                logger.debug(f"Found matching document in sample: {matching_doc}")
                 logger.debug(f"ID type in sample: {type(matching_doc['_id'])}")
 
         object_id = ObjectId(_id)
