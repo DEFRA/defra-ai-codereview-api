@@ -197,6 +197,9 @@ This feature is changes to the existing POST API  `/api/v1/code-reviews` and its
 	   3. Use the relevant standards provided to create a code review as per its existing functionality.
 	   4. Save a separate Markdown report file per standard-set in the format: `{code-review-record-id}-{standard-set-name}.md`
 	   5. Store references to these new report files in the `code-reviews` record
+   5. When refactoring the code:
+	   1. We don't want change any of the existing LLM prompts.  
+	   2. We want to retain all the functionality within `git_repos_agent.py` - flattening code repos and excluding files.
 
 ### 5.4 **Update GET code-reviews API Response & Storage**
    * When the code review is complete, the `GET /api/v1/code-reviews/{id}` endpoint should provide:
