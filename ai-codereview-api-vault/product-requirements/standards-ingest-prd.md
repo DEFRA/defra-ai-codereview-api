@@ -196,16 +196,14 @@ The feature changes the existing async agentic processing of codebases, adding c
 **Processing**
    1. Create a new "Standards Classification" LLM agent to determine which classifications match the codebase, and return a set of matching standards.     
    2. Process Steps for the "Standards Classification" agent:
-	   1. Get all classification options from the database to send to the LLM in the next step.
-	   2. Create an Anthropic LLM call to examine the code base and return relevant classifications.
+	  2.1. Get all classification options from the database to send to the LLM in the next step.
+	  2.2. Create an Anthropic LLM call to examine the code base and return relevant classifications.
 		   1. E.g. If the codebase is a Python codebase the `Python` classification will be returned.
-	   3. For each `standard_set_id` in `standard_sets`, **query** for all standards in that set whose classifications array is either empty i.e. "universal" or matches the classification from step 2.
-	   4. Send the combined list of standards to the `code_reviews_agent` 
-	   
-5.3.3. **Updating the `code_reviews_agent`**
-	In the `code_reviews_agent` perform the following steps:
-	   2. At present the `code_reviews_agent` uses the `standards_files` parameter, we wish to use a standards parameter rather than a file path. The standards will be passed from the `standards_classification_agent` detailed above.
-	   3. Use the relevant standards provided to create a code review as per its existing functionality.
+	  2.3. For each `standard_set_id` in `standard_sets`, **query** for all standards in that set whose classifications array is either empty i.e. "universal" or matches the classification from step 2.
+	  2.4. Send the combined list of standards to the `code_reviews_agent` 
+   3. In the `code_reviews_agent` perform the following steps:
+	  3.1. At present the `code_reviews_agent` uses the `standards_files` parameter, we wish to use a standards parameter rather than a file path. The standards will be passed from the `standards_classification_agent` detailed above.
+	  3.2. Use the relevant standards provided to create a code review as per its existing functionality.
 	   
    When refactoring the code:
 	   1. We don't want change any of the existing LLM prompts.  
