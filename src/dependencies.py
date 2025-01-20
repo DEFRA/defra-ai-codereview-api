@@ -5,6 +5,7 @@ from fastapi import Depends
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
 from src.config import settings
 from src.repositories.classification_repo import ClassificationRepository
+from src.repositories.standard_set_repo import StandardSetRepository
 
 async def get_classifications_collection() -> AsyncGenerator[AsyncIOMotorCollection, None]:
     """Get classifications collection."""
@@ -26,4 +27,18 @@ async def get_database() -> AsyncGenerator:
     try:
         yield client[settings.MONGO_INITDB_DATABASE]
     finally:
-        client.close() 
+        client.close()
+
+async def get_standard_sets_collection():
+    """Get standard sets collection."""
+    client = AsyncIOMotorClient(settings.MONGO_URI)
+    try:
+        yield client[settings.MONGO_INITDB_DATABASE].standard_sets
+    finally:
+        client.close()
+
+async def get_standard_set_repo(
+    collection: AsyncIOMotorCollection = Depends(get_standard_sets_collection)
+) -> StandardSetRepository:
+    """Get standard set repository instance."""
+    return StandardSetRepository(collection) 
