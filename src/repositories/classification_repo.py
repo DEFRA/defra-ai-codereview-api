@@ -18,6 +18,11 @@ class ClassificationRepository:
     async def create(self, classification: ClassificationCreate) -> Classification:
         """Create a new classification."""
         try:
+            # Check if classification with same name exists
+            existing = await self.get_by_name(classification.name)
+            if existing:
+                raise ValueError(f"Classification with name '{classification.name}' already exists")
+
             now = datetime.now(UTC)
             doc = classification.model_dump()
             doc.update({
@@ -98,4 +103,16 @@ class ClassificationRepository:
             return None
         except Exception as e:
             logger.error(f"Error updating classification: {str(e)}")
+            return None
+
+    async def get_by_name(self, name: str) -> Optional[Classification]:
+        """Get a classification by name."""
+        try:
+            doc = await self.collection.find_one({"name": name})
+            if doc:
+                doc["_id"] = str(doc["_id"])
+                return Classification.model_validate(doc)
+            return None
+        except Exception as e:
+            logger.error(f"Error getting classification by name: {str(e)}")
             return None 

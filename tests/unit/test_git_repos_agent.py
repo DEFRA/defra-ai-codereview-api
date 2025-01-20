@@ -14,7 +14,9 @@ from src.agents.git_repos_agent import (
     process_standards_repo,
     clone_repo,
     process_repositories,
-    STANDARDS_REPO
+    STANDARDS_REPO,
+    DATA_DIR,
+    STANDARDS_DIR
 )
 
 @pytest.fixture
@@ -106,7 +108,10 @@ async def test_process_standards_repo_in_llm_testing_mode(mock_temp_dir):
     # Given
     with patch('src.agents.git_repos_agent.settings') as mock_settings:
         mock_settings.LLM_TESTING = True
-        mock_settings.LLM_TESTING_STANDARDS_FILES = "test1,test2"
+        mock_settings.LLM_TESTING_STANDARDS_FILES = "test1.txt,test2.txt"
+        
+        # Ensure data directory exists
+        STANDARDS_DIR.mkdir(parents=True, exist_ok=True)
         
         # When
         result = await process_standards_repo(mock_temp_dir)
@@ -129,20 +134,24 @@ async def test_process_standards_repo_with_actual_files(mock_temp_dir):
     with patch('src.agents.git_repos_agent.settings') as mock_settings:
         mock_settings.LLM_TESTING = False
         
+        # Create test files with correct suffixes
         principles_file = mock_temp_dir / "test_principles.md"
         principles_file.write_text("Test principles")
         
         standards_file = mock_temp_dir / "test_standards.md"
         standards_file.write_text("Test standards")
         
+        # Ensure data directory exists
+        STANDARDS_DIR.mkdir(parents=True, exist_ok=True)
+        
         # When
         result = await process_standards_repo(mock_temp_dir)
         
         # Then
         assert len(result) == 2
-        assert all(isinstance(path, Path) for path in result)
-        assert any("principles" in str(path) for path in result)
-        assert any("standards" in str(path) for path in result)
+        file_names = [path.name for path in result]
+        assert "test_principles.md.txt" in file_names
+        assert "test_standards.md.txt" in file_names
 
 @pytest.mark.asyncio
 async def test_process_standards_repo_handles_corrupt_files(mock_temp_dir):
@@ -213,12 +222,15 @@ async def test_process_standards_repo_skips_invalid_suffixes(mock_temp_dir):
         valid_file = mock_temp_dir / "test_standards.md"
         valid_file.write_text("Test valid suffix")
         
+        # Ensure data directory exists
+        STANDARDS_DIR.mkdir(parents=True, exist_ok=True)
+        
         # When
         result = await process_standards_repo(mock_temp_dir)
         
         # Then
         assert len(result) == 1
-        assert "test_standards.md" in str(result[0])
+        assert result[0].name == "test_standards.md.txt"
 
 @pytest.mark.asyncio
 async def test_clone_repo_clones_successfully():
