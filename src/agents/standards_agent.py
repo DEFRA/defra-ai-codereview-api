@@ -13,6 +13,7 @@ from src.repositories.classification_repo import ClassificationRepository
 from src.repositories.standard_set_repo import StandardSetRepository
 from src.models.classification import Classification
 from anthropic import Anthropic
+from src.config import settings
 
 logger = setup_logger(__name__)
 
@@ -24,15 +25,12 @@ async def process_standard_set(standard_set_id: str, repository_url: str):
         # Get database connection
         from src.database import get_database
         db = await get_database()
-        logger.debug("Database connection established")
 
         # Get repositories
         repo = await download_repository(repository_url)
-        logger.debug(f"Repository downloaded to {repo}")
         
         # Get all classifications
         classifications = await get_classifications(db)
-        logger.debug(f"Retrieved {len(classifications)} classifications from database")
         
         # Process standards
         await process_standards(db, repo, standard_set_id, classifications)
@@ -49,7 +47,6 @@ async def download_repository(repository_url: str) -> Path:
     """Download the repository to a temporary directory."""
     import tempfile
     temp_dir = Path(tempfile.mkdtemp())
-    logger.debug(f"Created temporary directory for repository at {temp_dir}")
     await clone_repo(repository_url, temp_dir)
     logger.debug(f"Repository cloned successfully to {temp_dir}")
     return temp_dir
@@ -82,46 +79,78 @@ async def process_standards(
     
     # Delete any existing standards for this set
     result = await standards_collection.delete_many({"standard_set_id": standard_set_id})
-    logger.debug(f"Deleted {result.deleted_count} existing standards for set {standard_set_id}")
     
-    # Process markdown files
-    for root, _, files in os.walk(repo_path):
-        for file in files:
-            if not file.endswith('.md'):
-                continue
+    # Create name to ID mapping for classifications
+    classification_map = {c.name: str(c.id) for c in classifications}
+    
+    # If LLM testing is enabled, only process specified test files
+    if settings.LLM_TESTING:
+        logger.info("LLM testing mode enabled - using test standards files")
+        test_files = [x.strip() for x in settings.LLM_TESTING_STANDARDS_FILES.split(",") if x.strip()]
+        logger.debug(f"Looking for test files: {test_files}")
+        files_to_process = []
+        for root, _, files in os.walk(repo_path):
+            for file in files:
+                file_path = Path(root) / file
+                rel_path = file_path.relative_to(repo_path)
+                logger.debug(f"Checking file: {rel_path}")
+                # Strip any extension for comparison
+                file_base = file.rsplit('.', 1)[0]
+                test_file_bases = [tf.rsplit('.', 1)[0] for tf in test_files]
+                if any(test_base.lower() == file_base.lower() for test_base in test_file_bases):
+                    logger.debug(f"Found matching test file: {rel_path}")
+                    files_to_process.append((root, file))
+        logger.info(f"Found {len(files_to_process)} test files to process")
+    else:
+        # Process all markdown files
+        files_to_process = [
+            (root, file) 
+            for root, _, files in os.walk(repo_path)
+            for file in files 
+            if file.endswith('.md')
+        ]
+    
+    # Process files
+    for root, file in files_to_process:
+        file_path = Path(root) / file
+        logger.debug(f"Processing standard file: {file_path}")
+        
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
                 
-            file_path = Path(root) / file
-            logger.debug(f"Processing standard file: {file_path}")
+            # Get classifications for this standard
+            standard_classifications = await analyze_standard(
+                content,
+                [c.name for c in classifications]
+            )
+            logger.debug(f"Classifications for {file_path}: {standard_classifications}")
             
-            try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                    
-                # Get classifications for this standard
-                standard_classifications = await analyze_standard(
-                    content,
-                    [c.name for c in classifications]
-                )
-                logger.debug(f"Classifications for {file_path}: {standard_classifications}")
-                
-                # Create standard document
-                standard_doc = {
-                    "_id": ObjectId(),
-                    "text": content,
-                    "repository_path": str(file_path.relative_to(repo_path)),
-                    "standard_set_id": standard_set_id,
-                    "classifications": standard_classifications,
-                    "created_at": datetime.now(UTC),
-                    "updated_at": datetime.now(UTC)
-                }
-                
-                # Insert standard
-                result = await standards_collection.insert_one(standard_doc)
-                logger.debug(f"Inserted standard document with ID: {result.inserted_id}")
-                
-            except Exception as e:
-                logger.error(f"Error processing standard {file}: {str(e)}")
-                continue
+            # Convert classification names to IDs
+            classification_ids = [
+                ObjectId(classification_map[name])
+                for name in standard_classifications
+                if name in classification_map
+            ]
+            
+            # Create standard document
+            standard_doc = {
+                "_id": ObjectId(),
+                "text": content,
+                "repository_path": str(file_path.relative_to(repo_path)),
+                "standard_set_id": standard_set_id,
+                "classification_ids": classification_ids,
+                "created_at": datetime.now(UTC),
+                "updated_at": datetime.now(UTC)
+            }
+            
+            # Insert standard
+            result = await standards_collection.insert_one(standard_doc)
+            logger.debug(f"Inserted standard document with ID: {result.inserted_id}")
+            
+        except Exception as e:
+            logger.error(f"Error processing standard {file}: {str(e)}")
+            continue
 
 async def analyze_standard(content: str, classifications: List[str]) -> List[str]:
     """Use LLM to analyze standard and determine relevant classifications."""
