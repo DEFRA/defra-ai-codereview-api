@@ -169,7 +169,7 @@ Python, C#, Node.js, JavaScript, Java, .NET
      * **DELETE** `/api/v1/standard-sets/{id}`
        * Deletes the standard-set and all associated standards (and their references to classifications)
 
-## 5.3 Use standard sets in the existing code review flow
+## 5.3 Use standard sets in the existing code review flow (✅ Feature Completed)
 
 This feature makes changes to the existing POST API  `/api/v1/code-reviews` and its async processing. Instead of downloading standards from a file, read standard sets and standards from the database. 
 
@@ -190,34 +190,8 @@ Changing the existing async process in the following ways:
 4. Save a separate Markdown report file per standard-set in the format: `{code-review-record-id}-{standard-set-name}.md`
 5. Store references to these new report files in the `code-reviews` record. This will be an array with a record for each standard set. 
 
-## 5.4 **Update GET code-reviews API Response & Storage**
+## 5.4 **Update GET code-reviews API Response & Storage**  (✅ Feature Completed)
 The `GET /api/v1/code-reviews/{id}` endpoint should be extended to add the array of reports that are generated
-
-below is an example
-```json
-{
-  "_id": "678e804acaf304c2ee923755",
-  "repository_url": "https://github.com/DEFRA/find-ffa-data-ingester",
-  "status": "completed",
-  "reports": [
-    {
-    "id": "[standard set id 1]": 
-    "name": "Defra Software Development Standards",
-    "report_contents": "[contents of the report from the database]"
-    },
-        {
-    "id": "[standard set id 2]": 
-    "name": "Other Software Standards",
-    "report_contents": "[contents of the other report from the database]"
-    }
-  ],
-  "compliance_reports": {
-    "678e7e27d1362ce887308151": "data/codebase/find-ffa-data-ingester_report.md"
-  },
-  "created_at": "2025-01-20T16:56:42.954000",
-  "updated_at": "2025-01-20T16:56:56.179000",
-}
-```
 
 Note that the `GET /api/v1/code-reviews` API should remain the same. i.e. this is a different response model now
 
