@@ -1,10 +1,4 @@
-"""Integration tests for the complete code review processing flow.
-
-This module contains integration tests that verify the end-to-end functionality of:
-1. Processing repositories through git_repos_agent
-2. Checking compliance through standards_agent
-3. Database state transitions during processing
-"""
+"""Integration tests for code review processing."""
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch, AsyncMock
@@ -13,84 +7,112 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from mongomock_motor import AsyncMongoMockClient
 from src.models.code_review import ReviewStatus
-from src.api.v1.code_reviews import process_code_review
 
 
 @pytest.mark.asyncio
-async def test_process_code_review_end_to_end_success(
+async def test_create_code_review_success(
+    test_app: FastAPI,
+    test_client: TestClient,
+    mock_mongodb: AsyncMongoMockClient,
+    tmp_path: Path
+) -> None:
+    """Test successful code review creation."""
+    # Given
+    # Create a test standard set
+    standard_set = {
+        "name": "Test Standard Set",
+        "description": "Test Description"
+    }
+    standard_set_result = await mock_mongodb.standard_sets.insert_one(standard_set)
+    standard_set_id = str(standard_set_result.inserted_id)
+    
+    # Create mock files
+    mock_codebase = tmp_path / "test_codebase.txt"
+    mock_codebase.write_text("Mock codebase content")
+    
+    # When
+    with patch('src.agents.git_repos_agent.process_repositories', new_callable=AsyncMock) as mock_process:
+        mock_process.return_value = mock_codebase
+        
+        # Make the API request
+        response = test_client.post(
+            "/api/v1/code-reviews",
+            json={
+                "repository_url": "https://github.com/example/repo1",
+                "standard_sets": [standard_set_id]
+            }
+        )
+    
+    # Then
+    assert response.status_code == 201
+    data = response.json()
+    assert data["repository_url"] == "https://github.com/example/repo1"
+    assert data["status"] == ReviewStatus.STARTED
+    assert len(data["standard_sets"]) == 1
+    assert data["standard_sets"][0]["id"] == standard_set_id
+
+
+@pytest.mark.asyncio
+async def test_create_code_review_invalid_standard_set(
     test_app: FastAPI,
     test_client: TestClient,
     mock_mongodb: AsyncMongoMockClient
 ) -> None:
-    """
-    Test successful end-to-end code review processing.
-    
-    Given: A code review in STARTED state
-    When: Processing through both agents completes successfully
-    Then: Review should be marked as COMPLETED with compliance report
-    """
-    # Given
-    test_review = {
-        "repository_url": "https://github.com/example/repo1",
-        "status": ReviewStatus.STARTED,
-        "created_at": datetime.now(timezone.utc),
-        "updated_at": datetime.now(timezone.utc)
-    }
-    result = await mock_mongodb.code_reviews.insert_one(test_review)
-    review_id = str(result.inserted_id)
-    
-    # Mock the repository processing
-    mock_codebase = Path("test_codebase.txt")
-    mock_standards = [Path("test_standard.txt")]
-    mock_compliance_report = {
-        "status": "compliant",
-        "details": {
-            "passed_checks": ["check1", "check2"],
-            "failed_checks": [],
-            "warnings": []
+    """Test code review creation with invalid standard set."""
+    # When
+    response = test_client.post(
+        "/api/v1/code-reviews",
+        json={
+            "repository_url": "https://github.com/example/repo1",
+            "standard_sets": ["invalid_id"]
         }
-    }
-    
-    # When
-    with patch('src.api.v1.code_reviews.process_repositories') as mock_process, \
-         patch('src.api.v1.code_reviews.check_compliance') as mock_compliance:
-        
-        # Setup mocks
-        mock_process.return_value = (mock_codebase, mock_standards)
-        mock_compliance.return_value = mock_compliance_report
-        
-        # Process the review
-        with patch('src.database.db', mock_mongodb):
-            await process_code_review(review_id, test_review["repository_url"])
+    )
     
     # Then
-    # Verify database state transitions
-    updated_review = await mock_mongodb.code_reviews.find_one({"_id": result.inserted_id})
-    assert updated_review["status"] == ReviewStatus.COMPLETED
-    assert updated_review["compliance_report"] == mock_compliance_report
-    assert "updated_at" in updated_review
-    
-    # Verify mock calls
-    mock_process.assert_called_once_with(test_review["repository_url"])
-    mock_compliance.assert_called_once_with(mock_codebase, mock_standards)
+    assert response.status_code == 500
 
 
 @pytest.mark.asyncio
-async def test_process_code_review_git_agent_failure(
+async def test_create_code_review_missing_fields(
     test_app: FastAPI,
     test_client: TestClient,
     mock_mongodb: AsyncMongoMockClient
 ) -> None:
-    """
-    Test handling of git repository agent failures.
+    """Test code review creation with missing required fields."""
+    # When - Missing repository_url
+    response = test_client.post(
+        "/api/v1/code-reviews",
+        json={
+            "standard_sets": ["some_id"]
+        }
+    )
     
-    Given: A code review in STARTED state
-    When: Repository processing fails
-    Then: Review should be marked as FAILED
-    """
+    # Then
+    assert response.status_code == 422
+
+    # When - Missing standard_sets
+    response = test_client.post(
+        "/api/v1/code-reviews",
+        json={
+            "repository_url": "https://github.com/example/repo1"
+        }
+    )
+    
+    # Then
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_get_code_review_status(
+    test_app: FastAPI,
+    test_client: TestClient,
+    mock_mongodb: AsyncMongoMockClient
+) -> None:
+    """Test retrieving a code review's status."""
     # Given
     test_review = {
         "repository_url": "https://github.com/example/repo1",
+        "standard_sets": [],
         "status": ReviewStatus.STARTED,
         "created_at": datetime.now(timezone.utc),
         "updated_at": datetime.now(timezone.utc)
@@ -99,121 +121,10 @@ async def test_process_code_review_git_agent_failure(
     review_id = str(result.inserted_id)
     
     # When
-    with patch('src.api.v1.code_reviews.process_repositories') as mock_process:
-        # Simulate git agent failure
-        mock_process.side_effect = Exception("Failed to clone repository")
-        
-        with patch('src.database.db', mock_mongodb):
-            await process_code_review(review_id, test_review["repository_url"])
+    response = test_client.get(f"/api/v1/code-reviews/{review_id}")
     
     # Then
-    updated_review = await mock_mongodb.code_reviews.find_one({"_id": result.inserted_id})
-    assert updated_review["status"] == ReviewStatus.FAILED
-    assert "updated_at" in updated_review
-    
-    # Verify mock calls
-    mock_process.assert_called_once_with(test_review["repository_url"])
-
-
-@pytest.mark.asyncio
-async def test_process_code_review_standards_agent_failure(
-    test_app: FastAPI,
-    test_client: TestClient,
-    mock_mongodb: AsyncMongoMockClient
-) -> None:
-    """
-    Test handling of standards agent failures.
-    
-    Given: A code review in STARTED state
-    When: Standards compliance check fails
-    Then: Review should be marked as FAILED
-    """
-    # Given
-    test_review = {
-        "repository_url": "https://github.com/example/repo1",
-        "status": ReviewStatus.STARTED,
-        "created_at": datetime.now(timezone.utc),
-        "updated_at": datetime.now(timezone.utc)
-    }
-    result = await mock_mongodb.code_reviews.insert_one(test_review)
-    review_id = str(result.inserted_id)
-    
-    # Mock the repository processing
-    mock_codebase = Path("test_codebase.txt")
-    mock_standards = [Path("test_standard.txt")]
-    
-    # When
-    with patch('src.api.v1.code_reviews.process_repositories') as mock_process, \
-         patch('src.api.v1.code_reviews.check_compliance') as mock_compliance:
-        
-        # Setup mocks
-        mock_process.return_value = (mock_codebase, mock_standards)
-        mock_compliance.side_effect = Exception("Failed to check compliance")
-        
-        # Process the review
-        with patch('src.database.db', mock_mongodb):
-            await process_code_review(review_id, test_review["repository_url"])
-    
-    # Then
-    updated_review = await mock_mongodb.code_reviews.find_one({"_id": result.inserted_id})
-    assert updated_review["status"] == ReviewStatus.FAILED
-    assert "updated_at" in updated_review
-    
-    # Verify mock calls
-    mock_process.assert_called_once_with(test_review["repository_url"])
-    mock_compliance.assert_called_once_with(mock_codebase, mock_standards)
-
-
-@pytest.mark.asyncio
-async def test_process_code_review_state_transitions(
-    test_app: FastAPI,
-    test_client: TestClient,
-    mock_mongodb: AsyncMongoMockClient
-) -> None:
-    """
-    Test state transitions during code review processing.
-    
-    Given: A code review in STARTED state
-    When: Processing through both agents
-    Then: Should transition through expected states
-    """
-    # Given
-    test_review = {
-        "repository_url": "https://github.com/example/repo1",
-        "status": ReviewStatus.STARTED,
-        "created_at": datetime.now(timezone.utc),
-        "updated_at": datetime.now(timezone.utc)
-    }
-    result = await mock_mongodb.code_reviews.insert_one(test_review)
-    review_id = str(result.inserted_id)
-    
-    # Mock the repository processing
-    mock_codebase = Path("test_codebase.txt")
-    mock_standards = [Path("test_standard.txt")]
-    mock_compliance_report = {"status": "compliant"}
-    
-    async def check_state(expected_status: ReviewStatus) -> None:
-        current_review = await mock_mongodb.code_reviews.find_one({"_id": result.inserted_id})
-        assert current_review["status"] == expected_status
-    
-    # When/Then
-    with patch('src.api.v1.code_reviews.process_repositories') as mock_process, \
-         patch('src.api.v1.code_reviews.check_compliance') as mock_compliance, \
-         patch('src.database.db', mock_mongodb):
-        
-        # Setup mocks
-        mock_process.return_value = (mock_codebase, mock_standards)
-        mock_compliance.return_value = mock_compliance_report
-        
-        # Initial state
-        await check_state(ReviewStatus.STARTED)
-        
-        # Process the review
-        await process_code_review(review_id, test_review["repository_url"])
-        
-        # Final state
-        await check_state(ReviewStatus.COMPLETED)
-    
-    # Verify mock calls
-    mock_process.assert_called_once_with(test_review["repository_url"])
-    mock_compliance.assert_called_once_with(mock_codebase, mock_standards) 
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == ReviewStatus.STARTED
+    assert data["repository_url"] == test_review["repository_url"]

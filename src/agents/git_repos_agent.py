@@ -61,7 +61,7 @@ async def clone_repo(repo_url: str, target_dir: Path) -> None:
         import shutil
         shutil.rmtree(target_dir)
 
-    git.Repo.clone_from(repo_url, target_dir)
+    git.Repo.clone_from(repo_url, str(target_dir))
 
 
 async def process_repositories(repository_url: str) -> Path:
@@ -71,7 +71,8 @@ async def process_repositories(repository_url: str) -> Path:
     # Create necessary directories
     CODEBASE_DIR.mkdir(parents=True, exist_ok=True)
 
-    repo_name = repository_url.split('/')[-1].replace('.git', '')
+    # Extract repo name from URL
+    repo_name = os.path.basename(repository_url).replace('.git', '')
     codebase_file = CODEBASE_DIR / f"{repo_name}.txt"
 
     with tempfile.TemporaryDirectory() as temp_dir:

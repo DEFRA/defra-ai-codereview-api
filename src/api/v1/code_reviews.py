@@ -63,6 +63,7 @@ async def process_code_review(review_id: str, repository_url: str, standard_sets
                 
                 compliance_reports.append({
                     "id": str(standard_set_id),
+                    "standard_set_name": standard_set["name"],
                     "file": str(report_file),
                     "report": report_content
                 })
@@ -255,6 +256,8 @@ async def get_code_review(_id: str):
         logger.error(f"Invalid ObjectId format: {str(e)}")
         raise HTTPException(
             status_code=400, detail=f"Invalid review ID format: {str(e)}")
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error fetching code review: {str(e)}", exc_info=True)
         raise HTTPException(
