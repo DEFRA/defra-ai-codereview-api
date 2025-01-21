@@ -191,9 +191,35 @@ Changing the existing async process in the following ways:
 5. Store references to these new report files in the `code-reviews` record. This will be an array with a record for each standard set. 
 
 ## 5.4 **Update GET code-reviews API Response & Storage**
-   * When the code review is complete, the `GET /api/v1/code-reviews/{id}` endpoint should provide:
-     * The array of associated standard-sets used in the review
-     * The Markdown reports generated for each standard-set (filename and content)
+The `GET /api/v1/code-reviews/{id}` endpoint should be extended to add the array of reports that are generated
+
+below is an example
+```json
+{
+  "_id": "678e804acaf304c2ee923755",
+  "repository_url": "https://github.com/DEFRA/find-ffa-data-ingester",
+  "status": "completed",
+  "reports": [
+    {
+    "id": "[standard set id 1]": 
+    "name": "Defra Software Development Standards",
+    "report_contents": "[contents of the report from the database]"
+    },
+        {
+    "id": "[standard set id 2]": 
+    "name": "Other Software Standards",
+    "report_contents": "[contents of the other report from the database]"
+    }
+  ],
+  "compliance_reports": {
+    "678e7e27d1362ce887308151": "data/codebase/find-ffa-data-ingester_report.md"
+  },
+  "created_at": "2025-01-20T16:56:42.954000",
+  "updated_at": "2025-01-20T16:56:56.179000",
+}
+```
+
+Note that the `GET /api/v1/code-reviews` API should remain the same. i.e. this is a different response model now
 
 ## 5.5 Add classifications to code review flow
 The feature changes the existing async agentic processing of codebases, adding classifications. This also builds on the functionality in 5.3. 
