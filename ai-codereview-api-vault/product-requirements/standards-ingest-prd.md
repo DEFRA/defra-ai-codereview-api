@@ -190,30 +190,27 @@ Changing the existing async process in the following ways:
 4. Save a separate Markdown report file per standard-set in the format: `{code-review-record-id}-{standard-set-name}.md`
 5. Store references to these new report files in the `code-reviews` record. This will be an array with a record for each standard set. 
 
-## 5.4 Add classifications to code review flow
-The feature changes the existing async agentic processing of codebases, adding classifications. This also builds on the functionality in 5.3. 
-  
-**Processing**
-   1. Create a new "Standards Classification" LLM agent to determine which classifications match the codebase, and return a set of matching standards.     
-   2. Process Steps for the "Standards Classification" agent:
-	  2.1. Get all classification options from the database to send to the LLM in the next step.
-	  2.2. Create an Anthropic LLM call to examine the code base and return relevant classifications.
-		   1. E.g. If the codebase is a Python codebase the `Python` classification will be returned.
-	  2.3. For each `standard_set_id` in `standard_sets`, **query** for all standards in that set whose classifications array is either empty i.e. "universal" or matches the classification from step 2.
-	  2.4. Send the combined list of standards to the `code_reviews_agent` 
-   3. In the `code_reviews_agent` perform the following steps:
-	  3.1. At present the `code_reviews_agent` uses the `standards_files` parameter, we wish to use a standards parameter rather than a file path. The standards will be passed from the `standards_classification_agent` detailed above.
-	  3.2. Use the relevant standards provided to create a code review as per its existing functionality.
-	   
-   When refactoring the code:
-	   1. We don't want change any of the existing LLM prompts.  
-	   2. We want to retain all the functionality within `git_repos_agent.py` - flattening code repos and excluding files.
-
-### 5.5 **Update GET code-reviews API Response & Storage**
+## 5.4 **Update GET code-reviews API Response & Storage**
    * When the code review is complete, the `GET /api/v1/code-reviews/{id}` endpoint should provide:
      * The array of associated standard-sets used in the review
      * The Markdown reports generated for each standard-set (filename and content)
 
+## 5.5 Add classifications to code review flow
+The feature changes the existing async agentic processing of codebases, adding classifications. This also builds on the functionality in 5.3. 
+
+ This will involve creating a new "Standards Classification" LLM agent to determine which classifications match the codebase, and return a set of matching standards, that is then passed to the existing "Code Reviews" Agent.   
+
+5.5.1 **Processing**
+   1. The  `/api/v1/code-reviews` API will be updated to first invoke the "Standards Classification" agent in its async agentic processing.
+   2. Process Steps for the "Standards Classification" agent:
+	  2.1. Get all classifications from the database to send to the LLM in the next step.
+	  2.2. Create an new Anthropic LLM call to examine the code base and return relevant classifications. Use the classifications gathered in the previous step, step 2.1.
+	  2.3. For each `standard_set_id` in `standard_sets`, query for all standards whose classifications array is either empty i.e. "universal" or contains a match to the classification from the previous step, step 2.2.
+	  2.4. Send the combined list of standards to the "Code Reviews" Agent 
+   3. In the "Code Reviews" Agent perform the following steps:
+	  3.2. Use the list of relevant standards provided by the "Code Reviews" Agent to create a code review. 
+		  Note that this is refactoring the source of a standards, but the rest of the functionality will be the same.
+	
 ## 6. Frontend Requirements
 
 ### 6.1 Navigation (✅ Feature Completed)
