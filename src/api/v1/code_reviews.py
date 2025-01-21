@@ -140,6 +140,16 @@ async def create_code_review(code_review: CodeReviewCreate):
         created_review = await db.code_reviews.find_one({"_id": result.inserted_id})
         logger.debug(f"Created review document: {created_review}")
 
+        # Fetch standard set info
+        standard_sets_info = []
+        for set_id in code_review.standard_sets:
+            standard_set = await db.standard_sets.find_one({"_id": ObjectId(set_id)})
+            if standard_set:
+                standard_sets_info.append({"id": str(standard_set["_id"]), "name": standard_set["name"]})
+
+        # Update the created_review with standard set info
+        created_review["standard_sets"] = standard_sets_info
+
         logger.info(f"Successfully created code review with ID: {result.inserted_id}")
         return CodeReview(**created_review)
     except Exception as e:
