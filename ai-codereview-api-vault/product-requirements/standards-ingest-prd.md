@@ -169,11 +169,11 @@ Python, C#, Node.js, JavaScript, Java, .NET
      * **DELETE** `/api/v1/standard-sets/{id}`
        * Deletes the standard-set and all associated standards (and their references to classifications)
 
-### 5.3 Updated Code Review Flow
+## 5.3 Use standard sets in the existing code review flow (✅ Feature Completed)
 
-#### 5.3.1 Required Changes to Existing `/api/v1/code-reviews` Endpoint
+This feature makes changes to the existing POST API  `/api/v1/code-reviews` and its async processing. Instead of downloading standards from a file, read standard sets and standards from the database. 
 
-1. **Request Payload**
+5.3.1. **Request Payload**
    * Must now include an array of standard-set IDs to specify which sets to check against
    ```json
    {
@@ -182,37 +182,35 @@ Python, C#, Node.js, JavaScript, Java, .NET
    }
    ```
 
-2. **Processing**
-   1. Download and merge the code repository (existing functionality)
-   2. Use a new "Standards Selection" LLM agent to determine which classifications match the codebase
-      * Output (example):
-      ```json
-      {
-        "Python": false,
-        "C#": false,
-        "Node.js": true,
-        "JavaScript": true,
-        "Java": false,
-        ".NET": false
-      }
-      ```
-   3. For each `standard_set_id` in `standard_sets`, **query** for all standards in that set whose classifications array is either empty (universal) or is a subset of the `true` classifications from step 2
-   4. Combine these relevant standards with the code repository's merged file and pass them to the existing reporting agent
-   5. Use the `custom_prompt` from the standard-set for the LLM prompt
-   6. Save a separate Markdown report file per standard-set in the format:
-      ```
-      {code-review-record-id}-{standard-set-name}.md
-      ```
-   7. Store references to these new report files in the `code-reviews` record
+5.3.2 **Change existing async processing**
 
-3. **Response & Storage**
-   * When the code review is complete, the `GET /api/v1/code-reviews/{id}` endpoint should provide:
-     * The array of associated standard-sets used in the review
-     * The Markdown reports generated for each standard-set (filename and content)
+Changing the existing async process in the following ways:
+1. Use the standard_sets parameter to get the standard sets from the database
+3. Loop over each standard set and check the repository_url against the standards in each standard set
+4. Save a separate Markdown report file per standard-set in the format: `{code-review-record-id}-{standard-set-name}.md`
+5. Store references to these new report files in the `code-reviews` record. This will be an array with a record for each standard set. 
 
-#### 5.3.2 Existing Functionality to Remove
-* **Remove** hard-coded standards download in the code review flow. Standards are now **persisted** in the database
+## 5.4 **Update GET code-reviews API Response & Storage**  (✅ Feature Completed)
+The `GET /api/v1/code-reviews/{id}` endpoint should be extended to add the array of reports that are generated
 
+Note that the `GET /api/v1/code-reviews` API should remain the same. i.e. this is a different response model now
+
+## 5.5 Add classifications to code review flow
+The feature changes the existing async agentic processing of codebases, adding classifications. This also builds on the functionality in 5.3. 
+
+ This will involve creating a new "Standards Classification" LLM agent to determine which classifications match the codebase, and return a set of matching standards, that is then passed to the existing "Code Reviews" Agent.   
+
+5.5.1 **Processing**
+   1. The  `/api/v1/code-reviews` API will be updated to first invoke the "Standards Classification" agent in its async agentic processing.
+   2. Process Steps for the "Standards Classification" agent:
+	  2.1. Get all classifications from the database to send to the LLM in the next step.
+	  2.2. Create an new Anthropic LLM call to examine the code base and return relevant classifications. Use the classifications gathered in the previous step, step 2.1.
+	  2.3. For each `standard_set_id` in `standard_sets`, query for all standards whose classifications array is either empty i.e. "universal" or contains a match to the classification from the previous step, step 2.2.
+	  2.4. Send the combined list of standards to the "Code Reviews" Agent 
+   3. In the "Code Reviews" Agent perform the following steps:
+	  3.2. Use the list of relevant standards provided by the "Code Reviews" Agent to create a code review. 
+		  Note that this is refactoring the source of a standards, but the rest of the functionality will be the same.
+	
 ## 6. Frontend Requirements
 
 ### 6.1 Navigation (✅ Feature Completed)

@@ -57,6 +57,20 @@ class PyObjectId(str):
 class CodeReviewCreate(BaseModel):
     """Input model for creating a code review."""
     repository_url: str
+    standard_sets: list[str] = Field(description="List of standard set IDs to check against")
+
+
+class ComplianceReport(BaseModel):
+    """Model for individual compliance reports."""
+    id: str
+    file: str
+    report: str
+
+
+class StandardSetInfo(BaseModel):
+    """Standard set information."""
+    id: str
+    name: str
 
 
 class CodeReview(BaseModel):
@@ -64,7 +78,27 @@ class CodeReview(BaseModel):
     id: PyObjectId = Field(default_factory=PyObjectId, alias='_id')
     repository_url: str
     status: ReviewStatus = ReviewStatus.STARTED
-    compliance_report: Optional[str] = None
+    standard_sets: list[StandardSetInfo]
+    compliance_reports: list[ComplianceReport] = Field(
+        default_factory=list,
+        description="List of compliance reports, one per standard set"
+    )
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_encoders={ObjectId: str},
+        arbitrary_types_allowed=True
+    )
+
+
+class CodeReviewList(BaseModel):
+    """CodeReview model for list responses (without compliance reports)."""
+    id: PyObjectId = Field(default_factory=PyObjectId, alias='_id')
+    repository_url: str
+    status: ReviewStatus = ReviewStatus.STARTED
+    standard_sets: list[StandardSetInfo]
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
