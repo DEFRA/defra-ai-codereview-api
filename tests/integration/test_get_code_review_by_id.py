@@ -238,3 +238,56 @@ def test_py_object_id_generates_correct_json_schema() -> None:
     assert isinstance(schema, dict)
     assert schema["type"] == "string"
     assert schema["pattern"] == "^[0-9a-fA-F]{24}$" 
+
+
+@pytest.mark.asyncio
+async def test_get_code_review_includes_compliance_report_with_standard_set_name(
+    test_app: FastAPI,
+    test_client: TestClient,
+    mock_mongodb: AsyncMongoMockClient
+) -> None:
+    """
+    Test that compliance reports include standard set names.
+    
+    Given: A code review with compliance reports exists in database
+    When: Requesting the code review
+    Then: Should return 200 with compliance reports containing standard set names
+    """
+    # Given
+    standard_set_id = ObjectId()
+    standard_set = {
+        "_id": standard_set_id,
+        "name": "Security Standards",
+        "description": "Security standards for code review"
+    }
+    await mock_mongodb.standard_sets.insert_one(standard_set)
+
+    test_review = {
+        "_id": ObjectId(),
+        "repository_url": "https://github.com/example/repo1",
+        "standard_sets": [str(standard_set_id)],
+        "status": ReviewStatus.COMPLETED,
+        "compliance_reports": [{
+            "id": str(standard_set_id),
+            "file": "report.txt",
+            "report": "Test report content",
+            "standard_set_name": "Security Standards"
+        }],
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc)
+    }
+    await mock_mongodb.code_reviews.insert_one(test_review)
+
+    # When
+    with patch('src.database.db', mock_mongodb):
+        response = test_client.get(f"/api/v1/code-reviews/{str(test_review['_id'])}")
+
+    # Then
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["compliance_reports"]) == 1
+    report = data["compliance_reports"][0]
+    assert report["id"] == str(standard_set_id)
+    assert report["standard_set_name"] == "Security Standards"
+    assert report["file"] == "report.txt"
+    assert report["report"] == "Test report content"

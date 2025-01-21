@@ -63,6 +63,7 @@ class CodeReviewCreate(BaseModel):
 class ComplianceReport(BaseModel):
     """Model for individual compliance reports."""
     id: str
+    standard_set_name: str
     file: str
     report: str
 
