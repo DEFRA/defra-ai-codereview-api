@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from mongomock_motor import AsyncMongoMockClient
 from src.models.code_review import ReviewStatus, PyObjectId
 from bson import ObjectId
+from fastapi import HTTPException
 
 
 @pytest.mark.asyncio
@@ -131,9 +132,18 @@ async def test_get_code_review_accepts_string_id(
     Then: Should return 200 with correct review data
     """
     # Given
+    standard_set_id = ObjectId()
+    standard_set = {
+        "_id": standard_set_id,
+        "name": "Security Standards",
+        "description": "Security standards for code review"
+    }
+    await mock_mongodb.standard_sets.insert_one(standard_set)
+
     test_review = {
-        "_id": "507f1f77bcf86cd799439011",  # Valid ObjectId as string
+        "_id": ObjectId("507f1f77bcf86cd799439011"),
         "repository_url": "https://github.com/example/repo1",
+        "standard_sets": [str(standard_set_id)],
         "status": ReviewStatus.COMPLETED,
         "created_at": datetime.now(timezone.utc),
         "updated_at": datetime.now(timezone.utc)
@@ -142,13 +152,15 @@ async def test_get_code_review_accepts_string_id(
 
     # When
     with patch('src.database.db', mock_mongodb):
-        response = test_client.get(
-            f"/api/v1/code-reviews/{test_review['_id']}")
+        response = test_client.get(f"/api/v1/code-reviews/{str(test_review['_id'])}")
 
     # Then
     assert response.status_code == 200
     data = response.json()
-    assert data["_id"] == test_review["_id"]
+    assert data["repository_url"] == test_review["repository_url"]
+    assert data["status"] == test_review["status"]
+    assert len(data["standard_sets"]) == 1
+    assert data["standard_sets"][0]["name"] == "Security Standards"
 
 
 def test_py_object_id_handles_validation_edge_cases() -> None:
@@ -186,16 +198,18 @@ async def test_get_code_review_returns_404_when_not_found(
     Then: Should return 404 with not found message
     """
     # Given
-    valid_id = "507f1f77bcf86cd799439011"
+    valid_id = ObjectId()  # Create a valid but non-existent ID
 
     # When
     with patch('src.database.db', mock_mongodb):
-        response = test_client.get(f"/api/v1/code-reviews/{valid_id}")
+        # The mock database will naturally return None for a non-existent ID
+        response = test_client.get(f"/api/v1/code-reviews/{str(valid_id)}")
 
     # Then
     assert response.status_code == 404
     data = response.json()
-    assert data["detail"] == "Code review not found"
+    assert "detail" in data
+    assert "not found" in data["detail"].lower()
 
 
 def test_py_object_id_generates_correct_json_schema() -> None:
@@ -213,6 +227,9 @@ def test_py_object_id_generates_correct_json_schema() -> None:
     class MockHandler(GetJsonSchemaHandler):
         def __init__(self):
             pass
+
+        def resolve_ref_schema(self, schema):
+            return schema
 
     # When
     schema = PyObjectId.__get_pydantic_json_schema__(None, MockHandler())

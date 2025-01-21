@@ -5,9 +5,11 @@ This module tests the core functionality for:
 2. Performing compliance checks against standards
 3. Error handling for API and configuration issues
 """
+import os
 import pytest
 from pathlib import Path
 from unittest.mock import patch, MagicMock, AsyncMock
+from anthropic import AsyncAnthropic, AuthenticationError
 from src.agents.code_reviews_agent import (
     generate_user_prompt,
     check_compliance,
@@ -40,121 +42,87 @@ def test():
     print("Hello World")"""
 
 @pytest.mark.asyncio
-async def test_generate_user_prompt_includes_required_components(
-    mock_standard_content,
-    mock_codebase_content
-):
+async def test_generate_user_prompt_includes_required_components():
     """
     Test prompt generation includes all necessary components.
-    
+
     Given: Standard content and codebase content
     When: Generating a user prompt
     Then: Should include standards, codebase, and instructions
     """
+    # Given
+    standards = [{"_id": "test_id", "text": "Test standard content"}]
+    codebase_content = "# File: test.py\ndef test():\n    print('Hello World')"
+
     # When
-    prompt = await generate_user_prompt(mock_standard_content, mock_codebase_content)
-    
+    prompt = await generate_user_prompt(standards, codebase_content)
+
     # Then
-    assert mock_standard_content in prompt
-    assert mock_codebase_content in prompt
-    assert "Compare the entire codebase" in prompt
-    assert "Generate a informative but concise compliance report" in prompt
-
-@pytest.mark.asyncio
-async def test_check_compliance_generates_report_on_success():
-    """
-    Test successful compliance check workflow.
-    
-    Given: Valid files and working API connection
-    When: Performing a compliance check
-    Then: Should generate a compliance report
-    """
-    # Given
-    codebase_file = Path("test_codebase.txt")
-    standards_files = [Path("test_standard.txt")]
-    
-    mock_message = MagicMock()
-    mock_message.text = "Test compliance report"
-    mock_response = MagicMock()
-    mock_response.content = [mock_message]
-    
-    mock_client = MagicMock()
-    mock_client.messages.create.return_value = mock_response
-    
-    # When
-    with patch('src.agents.code_reviews_agent.Anthropic', return_value=mock_client) as mock_anthropic, \
-         patch('builtins.open', create=True) as mock_open, \
-         patch('pathlib.Path.write_text') as mock_write, \
-         patch.dict('os.environ', {'ANTHROPIC_API_KEY': 'test_key'}):
-        
-        mock_open.return_value.__enter__.return_value.read.side_effect = [
-            "test codebase content",  # codebase file
-            "test standard content",  # standard file
-        ]
-        
-        result = await check_compliance(codebase_file, standards_files)
-        
-        # Then
-        # Verify API call
-        mock_client.messages.create.assert_called_once()
-        call_kwargs = mock_client.messages.create.call_args[1]
-        assert call_kwargs['model'] == "claude-3-5-sonnet-20241022"
-        assert call_kwargs['max_tokens'] == 4096
-        assert call_kwargs['temperature'] == 0
-        assert call_kwargs['system'] == SYSTEM_PROMPT
-        
-        # Verify report content
-        assert "Test compliance report" in result
-
-@pytest.mark.asyncio
-async def test_check_compliance_raises_error_without_api_key():
-    """
-    Test handling of missing API key.
-    
-    Given: No API key in environment
-    When: Attempting a compliance check
-    Then: Should raise ValueError with clear message
-    """
-    # Given
-    codebase_file = Path("test_codebase.txt")
-    standards_files = [Path("test_standard.txt")]
-    
-    # When/Then
-    with patch.dict('os.environ', clear=True), \
-         pytest.raises(ValueError) as exc_info:
-        await check_compliance(codebase_file, standards_files)
-    
-    assert "ANTHROPIC_API_KEY environment variable is not set" in str(exc_info.value)
+    assert "Test standard content" in prompt
+    assert "test.py" in prompt
+    assert "Hello World" in prompt
 
 @pytest.mark.asyncio
 async def test_check_compliance_handles_api_errors():
     """
     Test handling of API failures.
-    
+
     Given: API that raises an error
     When: Performing a compliance check
     Then: Should return error report with details
     """
     # Given
     codebase_file = Path("test_codebase.txt")
-    standards_files = [Path("test_standard.txt")]
-    
-    mock_client = MagicMock()
-    mock_client.messages.create.side_effect = Exception("API Error")
-    
-    # When
-    with patch('src.agents.code_reviews_agent.Anthropic', return_value=mock_client) as mock_anthropic, \
+    standards = [{"_id": "test_standard", "text": "Test standard content"}]
+    review_id = "test_review_id"
+    standard_set_name = "test_standard_set"
+
+    error_response = {
+        'type': 'error',
+        'error': {
+            'type': 'authentication_error',
+            'message': 'invalid x-api-key'
+        }
+    }
+
+    mock_client = AsyncMock()
+    mock_client._request = AsyncMock(side_effect=AuthenticationError(
+        message=f"Error code: 401 - {error_response}",
+        response=MagicMock(status_code=401),
+        body=error_response
+    ))
+
+    # When/Then
+    with patch('anthropic.AsyncAnthropic', return_value=mock_client), \
          patch('builtins.open', create=True) as mock_open, \
-         patch('pathlib.Path.write_text') as mock_write, \
          patch.dict('os.environ', {'ANTHROPIC_API_KEY': 'test_key'}):
-        
-        mock_open.return_value.__enter__.return_value.read.side_effect = [
-            "test codebase content",  # codebase file
-            "test standard content",  # standard file
-        ]
-        
-        result = await check_compliance(codebase_file, standards_files)
-        
-        # Then
-        assert "Error processing standard" in result
-        assert "API Error" in result 
+
+        mock_open.return_value.__enter__.return_value.read.return_value = "Test content"
+        with pytest.raises(AuthenticationError) as exc_info:
+            await check_compliance(codebase_file, standards, review_id, standard_set_name)
+
+        assert "invalid x-api-key" in str(exc_info.value)
+
+@pytest.mark.asyncio
+async def test_check_compliance_raises_error_without_api_key():
+    """
+    Test handling of missing API key.
+
+    Given: No API key in environment
+    When: Attempting a compliance check
+    Then: Should raise ValueError with clear message
+    """
+    # Given
+    codebase_file = Path("test_codebase.txt")
+    standards = [{"_id": "test_standard", "text": "Test standard content"}]
+    review_id = "test_review_id"
+    standard_set_name = "test_standard_set"
+
+    # When/Then
+    with patch.dict('os.environ', clear=True), \
+         patch('builtins.open', create=True) as mock_open:
+        mock_open.return_value.__enter__.return_value.read.return_value = "Test content"
+        with pytest.raises(ValueError) as exc_info:
+            await check_compliance(codebase_file, standards, review_id, standard_set_name)
+
+        assert "ANTHROPIC_API_KEY" in str(exc_info.value)

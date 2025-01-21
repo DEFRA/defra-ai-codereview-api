@@ -1,7 +1,7 @@
 """Standards Checking Agent for compliance analysis."""
 import os
 from pathlib import Path
-from typing import List
+from typing import List, Dict, Any
 from anthropic import AsyncAnthropic
 from src.logging_config import setup_logger
 
@@ -14,7 +14,7 @@ Provide detailed recommendations for non-compliant areas.
 Consider the codebase as a whole when evaluating compliance."""
 
 
-async def generate_user_prompt(standards: List[dict], codebase_content: str) -> str:
+async def generate_user_prompt(standards: List[Dict[str, Any]], codebase_content: str) -> str:
     """Generate the user prompt for the Anthropic model."""
     # Combine all standards into a single string
     standards_content = "\n\n".join([f"## Standard {std['_id']}\n{std['text']}" for std in standards])
@@ -68,7 +68,7 @@ Relevant Files/Sections:
     return prompt
 
 
-async def check_compliance(codebase_file: Path, standards: List[dict], review_id: str, standard_set_name: str) -> Path:
+async def check_compliance(codebase_file: Path, standards: List[Dict[str, Any]], review_id: str, standard_set_name: str) -> Path:
     """Check codebase compliance against standards using Anthropic's Claude."""
     try:
         # Read codebase content
@@ -81,7 +81,11 @@ async def check_compliance(codebase_file: Path, standards: List[dict], review_id
         logger.debug(f"Generated prompt word count: {len(prompt.split())}")
 
         # Get Anthropic client
-        anthropic = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise ValueError("ANTHROPIC_API_KEY environment variable not set")
+
+        anthropic = AsyncAnthropic(api_key=api_key)
 
         # Call Claude for analysis
         logger.info("Starting compliance check")

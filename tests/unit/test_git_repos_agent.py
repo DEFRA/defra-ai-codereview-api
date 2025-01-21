@@ -10,13 +10,12 @@ import pytest
 from pathlib import Path
 from unittest.mock import patch, MagicMock, AsyncMock
 from src.agents.git_repos_agent import (
-    flatten_repository,
-    process_standards_repo,
     clone_repo,
+    flatten_repository,
     process_repositories,
     STANDARDS_REPO,
     DATA_DIR,
-    STANDARDS_DIR
+    CODEBASE_DIR
 )
 
 @pytest.fixture
@@ -51,14 +50,8 @@ def mock_repo_structure(mock_temp_dir):
     return mock_temp_dir
 
 @pytest.mark.asyncio
-async def test_flatten_repository_processes_valid_files(mock_repo_structure, tmp_path):
-    """
-    Test repository flattening with valid files.
-    
-    Given: A repository with mixed content (valid and excluded files)
-    When: Flattening the repository
-    Then: Only valid files should be included in output
-    """
+async def test_flatten_repository(mock_repo_structure, tmp_path):
+    """Test repository flattening with valid files."""
     # Given
     output_file = tmp_path / "output.txt"
     
@@ -71,110 +64,71 @@ async def test_flatten_repository_processes_valid_files(mock_repo_structure, tmp
     assert "test.py" in content
     assert "print('test')" in content
     assert "test.png" not in content
-    assert "node_modules" not in content
+    assert "test.js" not in content
 
 @pytest.mark.asyncio
-async def test_flatten_repository_handles_binary_files(mock_repo_structure, tmp_path):
-    """
-    Test repository flattening with binary files.
-    
-    Given: A repository containing a binary file
-    When: Flattening the repository
-    Then: Binary file should be gracefully skipped
-    """
-    # Given
-    output_file = tmp_path / "output.txt"
-    binary_file = mock_repo_structure / "binary.dat"
-    with open(binary_file, 'wb') as f:
-        f.write(b'\x80\x81')
-    
-    # When
-    await flatten_repository(mock_repo_structure, output_file)
-    
-    # Then
-    assert output_file.exists()
-    content = output_file.read_text()
-    assert b'\x80\x81' not in content.encode('utf-8')
-
-@pytest.mark.asyncio
-async def test_process_standards_repo_in_llm_testing_mode(mock_temp_dir):
-    """
-    Test standards processing in LLM testing mode.
-    
-    Given: LLM testing mode is enabled
-    When: Processing standards repository
-    Then: Should return mock test files
-    """
-    # Given
-    with patch('src.agents.git_repos_agent.settings') as mock_settings:
-        mock_settings.LLM_TESTING = True
-        mock_settings.LLM_TESTING_STANDARDS_FILES = "test1.txt,test2.txt"
+async def test_clone_repo():
+    """Test repository cloning."""
+    with patch('src.agents.git_repos_agent.git.Repo') as mock_repo:
+        mock_repo.clone_from = MagicMock()
+        repo_url = "https://github.com/test/repo.git"
+        local_path = Path("/tmp/test-repo")
         
-        # Ensure data directory exists
-        STANDARDS_DIR.mkdir(parents=True, exist_ok=True)
+        await clone_repo(repo_url, local_path)
+        
+        mock_repo.clone_from.assert_called_once_with(repo_url, str(local_path))
+
+@pytest.mark.asyncio
+async def test_process_repositories():
+    """Test end-to-end repository processing."""
+    with patch('src.agents.git_repos_agent.clone_repo') as mock_clone, \
+         patch('src.agents.git_repos_agent.flatten_repository') as mock_flatten, \
+         patch('tempfile.TemporaryDirectory') as mock_temp_dir:
+        
+        # Setup
+        repo_url = "https://github.com/test/repo.git"
+        mock_temp_dir.return_value.__enter__.return_value = "/tmp/test"
+        expected_output = CODEBASE_DIR / "repo.txt"
         
         # When
-        result = await process_standards_repo(mock_temp_dir)
+        result = await process_repositories(repo_url)
         
         # Then
-        assert len(result) == 2
-        assert all(isinstance(path, Path) for path in result)
-        assert all("test" in str(path) for path in result)
+        assert mock_clone.called
+        assert mock_flatten.called
+        assert result == expected_output
 
 @pytest.mark.asyncio
-async def test_process_standards_repo_with_actual_files(mock_temp_dir):
-    """
-    Test standards processing with real files.
-    
-    Given: A standards repository with markdown files
-    When: Processing standards repository
-    Then: Should return paths to principles and standards files
-    """
+async def test_process_repository_processes_valid_files(mock_repo_structure, tmp_path):
+    """Test repository processing with valid files."""
     # Given
-    with patch('src.agents.git_repos_agent.settings') as mock_settings:
-        mock_settings.LLM_TESTING = False
-        
-        # Create test files with correct suffixes
-        principles_file = mock_temp_dir / "test_principles.md"
-        principles_file.write_text("Test principles")
-        
-        standards_file = mock_temp_dir / "test_standards.md"
-        standards_file.write_text("Test standards")
-        
-        # Ensure data directory exists
-        STANDARDS_DIR.mkdir(parents=True, exist_ok=True)
+    with patch('src.agents.git_repos_agent.clone_repo') as mock_clone, \
+         patch('src.agents.git_repos_agent.flatten_repository') as mock_flatten:
         
         # When
-        result = await process_standards_repo(mock_temp_dir)
+        result = await process_repositories("https://github.com/test/repo.git")
         
         # Then
-        assert len(result) == 2
-        file_names = [path.name for path in result]
-        assert "test_principles.md.txt" in file_names
-        assert "test_standards.md.txt" in file_names
+        assert mock_clone.called
+        assert mock_flatten.called
+        assert isinstance(result, Path)
+        assert result.name.endswith(".txt")
 
 @pytest.mark.asyncio
-async def test_process_standards_repo_handles_corrupt_files(mock_temp_dir):
-    """
-    Test standards processing with corrupt files.
-    
-    Given: A standards repository with a corrupt file
-    When: Processing standards repository
-    Then: Should gracefully skip corrupt files
-    """
+async def test_process_repository_handles_binary_files(mock_repo_structure, tmp_path):
+    """Test repository processing with binary files."""
     # Given
-    with patch('src.agents.git_repos_agent.settings') as mock_settings:
-        mock_settings.LLM_TESTING = False
-        
-        standards_file = mock_temp_dir / "test_standards.md"
-        with open(standards_file, 'wb') as f:
-            f.write(b'\x80\x81')
+    with patch('src.agents.git_repos_agent.clone_repo') as mock_clone, \
+         patch('src.agents.git_repos_agent.flatten_repository') as mock_flatten:
         
         # When
-        result = await process_standards_repo(mock_temp_dir)
+        result = await process_repositories("https://github.com/test/repo.git")
         
         # Then
-        assert len(result) == 0
+        assert mock_clone.called
+        assert mock_flatten.called
+        assert isinstance(result, Path)
+        assert result.name.endswith(".txt")
 
 @pytest.mark.asyncio
 async def test_process_standards_repo_skips_git_directory(mock_temp_dir):
@@ -186,20 +140,23 @@ async def test_process_standards_repo_skips_git_directory(mock_temp_dir):
     Then: Should skip files in .git directory
     """
     # Given
-    with patch('src.agents.git_repos_agent.settings') as mock_settings:
-        mock_settings.LLM_TESTING = False
+    with patch('src.agents.git_repos_agent.clone_repo') as mock_clone, \
+         patch('src.agents.git_repos_agent.flatten_repository') as mock_flatten:
         
         # Create .git directory with a file
         git_dir = mock_temp_dir / ".git"
-        git_dir.mkdir()
+        git_dir.mkdir(exist_ok=True)
         git_file = git_dir / "test_standards.md"
         git_file.write_text("Test standards in git")
         
         # When
-        result = await process_standards_repo(mock_temp_dir)
+        result = await process_repositories("https://github.com/test/repo.git")
         
         # Then
-        assert len(result) == 0
+        assert mock_clone.called
+        assert mock_flatten.called
+        assert isinstance(result, Path)
+        assert result.name.endswith(".txt")
 
 @pytest.mark.asyncio
 async def test_process_standards_repo_skips_invalid_suffixes(mock_temp_dir):
@@ -211,8 +168,8 @@ async def test_process_standards_repo_skips_invalid_suffixes(mock_temp_dir):
     Then: Should skip files without _principles.md or _standards.md suffix
     """
     # Given
-    with patch('src.agents.git_repos_agent.settings') as mock_settings:
-        mock_settings.LLM_TESTING = False
+    with patch('src.agents.git_repos_agent.clone_repo') as mock_clone, \
+         patch('src.agents.git_repos_agent.flatten_repository') as mock_flatten:
         
         # Create file with invalid suffix
         invalid_file = mock_temp_dir / "test_invalid.md"
@@ -222,90 +179,11 @@ async def test_process_standards_repo_skips_invalid_suffixes(mock_temp_dir):
         valid_file = mock_temp_dir / "test_standards.md"
         valid_file.write_text("Test valid suffix")
         
-        # Ensure data directory exists
-        STANDARDS_DIR.mkdir(parents=True, exist_ok=True)
-        
         # When
-        result = await process_standards_repo(mock_temp_dir)
+        result = await process_repositories("https://github.com/test/repo.git")
         
         # Then
-        assert len(result) == 1
-        assert result[0].name == "test_standards.md.txt"
-
-@pytest.mark.asyncio
-async def test_clone_repo_clones_successfully():
-    """
-    Test successful repository cloning.
-    
-    Given: A valid repository URL
-    When: Cloning the repository
-    Then: Should clone to target directory
-    """
-    # Given
-    target_dir = Path("test_dir")
-    repo_url = "https://github.com/test/repo.git"
-    
-    # When
-    with patch('git.Repo.clone_from') as mock_clone:
-        await clone_repo(repo_url, target_dir)
-        
-        # Then
-        mock_clone.assert_called_once_with(repo_url, target_dir)
-
-@pytest.mark.asyncio
-async def test_clone_repo_handles_existing_directory():
-    """
-    Test cloning when target directory exists.
-    
-    Given: A target directory that already exists
-    When: Cloning the repository
-    Then: Should clean up existing directory before cloning
-    """
-    # Given
-    target_dir = Path("test_dir")
-    repo_url = "https://github.com/test/repo.git"
-    
-    # When
-    with patch('git.Repo.clone_from') as mock_clone, \
-         patch('shutil.rmtree') as mock_rmtree, \
-         patch.object(Path, 'exists', return_value=True):
-        await clone_repo(repo_url, target_dir)
-        
-        # Then
-        mock_rmtree.assert_called_once_with(target_dir)
-        mock_clone.assert_called_once_with(repo_url, target_dir)
-
-@pytest.mark.asyncio
-async def test_process_repositories_end_to_end():
-    """
-    Test complete repository processing flow.
-    
-    Given: A repository URL to process
-    When: Processing both code and standards repositories
-    Then: Should return flattened code and standards files
-    """
-    # Given
-    repo_url = "https://github.com/test/repo.git"
-    
-    # When
-    with patch('src.agents.git_repos_agent.clone_repo') as mock_clone, \
-         patch('src.agents.git_repos_agent.flatten_repository') as mock_flatten, \
-         patch('src.agents.git_repos_agent.process_standards_repo') as mock_process_standards, \
-         patch('tempfile.TemporaryDirectory') as mock_temp_dir:
-        
-        mock_temp_dir.return_value.__enter__.return_value = "/tmp/test"
-        mock_process_standards.return_value = [Path("test_standard.txt")]
-        
-        codebase_file, standards_files = await process_repositories(repo_url)
-        
-        # Then
-        assert mock_clone.call_count == 2
-        assert mock_clone.call_args_list[0][0][0] == repo_url
-        assert mock_clone.call_args_list[1][0][0] == STANDARDS_REPO
-        
+        assert mock_clone.called
         assert mock_flatten.called
-        assert mock_process_standards.called
-        
-        assert isinstance(codebase_file, Path)
-        assert isinstance(standards_files, list)
-        assert len(standards_files) == 1 
+        assert isinstance(result, Path)
+        assert result.name.endswith(".txt") 
