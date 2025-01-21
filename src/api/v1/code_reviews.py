@@ -63,6 +63,7 @@ async def process_code_review(review_id: str, repository_url: str, standard_sets
                 
                 compliance_reports.append({
                     "id": str(standard_set_id),
+                    "standard_set_name": standard_set["name"],
                     "file": str(report_file),
                     "report": report_content
                 })
