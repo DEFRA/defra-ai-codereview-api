@@ -39,7 +39,7 @@ async def process_code_review(review_id: str, repository_url: str, standard_sets
         codebase_file = await process_repositories(repository_url)
         
         # Get standards from database for each standard set
-        compliance_reports = {}
+        compliance_reports = []
         for standard_set_id in standard_sets:
             try:
                 # Get standard set from database
@@ -56,7 +56,16 @@ async def process_code_review(review_id: str, repository_url: str, standard_sets
 
                 # Check compliance
                 report_file = await check_compliance(codebase_file, standards, review_id, standard_set["name"])
-                compliance_reports[standard_set_id] = str(report_file)
+                
+                # Read the report content
+                with open(report_file, 'r', encoding='utf-8') as f:
+                    report_content = f.read()
+                
+                compliance_reports.append({
+                    "id": str(standard_set_id),
+                    "file": str(report_file),
+                    "report": report_content
+                })
 
             except Exception as e:
                 logger.error(f"Error processing standard set {standard_set_id}: {str(e)}")
@@ -113,7 +122,7 @@ async def create_code_review(code_review: CodeReviewCreate):
             "repository_url": code_review.repository_url,
             "standard_sets": code_review.standard_sets,
             "status": ReviewStatus.STARTED,
-            "compliance_reports": {},
+            "compliance_reports": [],
             "created_at": datetime.now(UTC),
             "updated_at": datetime.now(UTC)
         }
