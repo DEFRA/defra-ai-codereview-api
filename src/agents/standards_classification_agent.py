@@ -44,30 +44,27 @@ async def analyze_codebase_classifications(
                     continue
                     
         # Generate prompt
-        prompt = f"""Analyze this codebase and identify which technology classifications are used from the list below. Provide your answer as a comma-separated list of ONLY the matching technology categories (e.g., "Python, Node.js"). Return ONLY the list - no explanations or additional text. Return an empty string if no matches are found.
+        prompt = f"""Analyze this codebase and identify which technology classifications are used from the list below.
 
-Available Technology Classifications:
+CRITICAL:
+- Your response must ONLY contain a comma-separated list of matching classifications ONLY from the list below.
+- DO NOT include any other text, explanations, or formatting.
+- Only include classifications that are present in the codebase.
+
+Examples of valid responses:
+"Python, React, Docker"
+"Java, Spring Boot"
+"Node.js, TypeScript"
+"" (if no matches to the available classifications list below)
+
+Available Classifications:
 {", ".join([c.name for c in classifications])}
 
 Codebase Files and Content:
-{codebase_content}
-
-Key areas to consider:
-1. Programming languages
-2. Frameworks & libraries
-3. Build tools & package managers
-4. Config files
-5. Infrastructure & deployment
-
-Example outputs:
-- "Python, React, Docker"
-- "Java, Spring Boot, Maven"
-- "" (empty string if no matches)
-"""
+{codebase_content}"""
 
         # Log the prompt and available classifications
         logger.debug("Available classifications: %s", [c.name for c in classifications])
-        logger.debug("Generated prompt:\n%s", prompt)
 
         # Get Anthropic client
         api_key = os.getenv("ANTHROPIC_API_KEY")
@@ -93,8 +90,25 @@ Example outputs:
             logger.info("No classifications found in LLM response")
             return []
             
-        # Get classification IDs that match the response
-        classification_names = [name.strip() for name in response.split(",")]
+        # Clean and parse classification names more strictly
+        classification_names = []
+        # First remove any explanatory text by finding the last line with actual classifications
+        response_lines = response.strip().split('\n')
+        actual_response = response_lines[-1]  # Take the last non-empty line
+        for line in reversed(response_lines):
+            if ',' in line:  # Found a line with comma-separated values
+                actual_response = line
+                break
+
+        # Now parse the comma-separated values
+        for name in actual_response.split(","):
+            cleaned = name.strip().strip('"').strip()  # Remove quotes and extra spaces
+            # Check for exact match in available classifications
+            for classification in classifications:
+                if cleaned.lower() == classification.name.lower():  # Case-insensitive comparison
+                    classification_names.append(classification.name)  # Use exact name from classification
+                    break
+                
         logger.debug("Parsed classification names: %s", classification_names)
         
         matching_ids = [

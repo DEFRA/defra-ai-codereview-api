@@ -14,20 +14,15 @@ from src.repositories.errors import DatabaseError, RepositoryError
 from bson import ObjectId
 from bson.errors import InvalidId
 from multiprocessing import Process
+from src.agents.standards_agent import process_standard_set
 
 logger = setup_logger(__name__)
 
 router = APIRouter(prefix="/standard-sets", tags=["standard-sets"])
 
-def run_agent_process(standard_set_id: str, repository_url: str):
-    """Run the agent process in a separate process."""
-    async def _run():
-        try:
-            await process_standard_set(standard_set_id, repository_url)
-        except Exception as e:
-            logger.error(f"Error in agent process: {str(e)}", exc_info=True)
-
-    asyncio.run(_run())
+def run_agent_process_sync(standard_set_id: str, repository_url: str):
+    """Run the agent process synchronously."""
+    asyncio.run(process_standard_set(standard_set_id, repository_url))
 
 @router.post("/", 
          response_model=StandardSet,
@@ -59,7 +54,7 @@ async def create_standard_set(
             
         # Start agent in separate process
         Process(
-            target=run_agent_process,
+            target=run_agent_process_sync,
             args=(str(standard_set_doc.id), standard_set.repository_url)
         ).start()
         
@@ -74,17 +69,15 @@ async def create_standard_set(
 
 @router.get("/", response_model=list[StandardSet])
 async def get_standard_sets(
-    collection: AsyncIOMotorCollection = Depends(get_standard_sets_collection)
+    standard_set_repo: StandardSetRepository = Depends(get_standard_set_repo)
 ):
     """Get all standard sets."""
     try:
-        try:
-            cursor = collection.find({})
-            standard_sets = await cursor.to_list(length=None)
-            return standard_sets
-        except DatabaseError as e:
-            logger.error(f"Database error getting standard sets: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+        standard_sets = await standard_set_repo.get_all()
+        return standard_sets
+    except DatabaseError as e:
+        logger.error(f"Database error getting standard sets: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         logger.error(f"Error getting standard sets: {e}")
         raise HTTPException(status_code=500, detail=str(e))

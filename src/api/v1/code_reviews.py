@@ -70,13 +70,55 @@ async def process_code_review(review_id: str, repository_url: str, standard_sets
                     continue
 
                 # Get standards that match the classifications or are universal (empty classification_ids)
-                standards = await db.standards.find({
+                logger.debug(f"Querying standards for standard set {standard_set_id}")
+                logger.debug(f"Matching classification IDs: {matching_classification_ids}")
+                
+                # Convert classification IDs to ObjectIds for MongoDB query
+                matching_classification_obj_ids = [ObjectId(id) for id in matching_classification_ids]
+                logger.debug(f"Using classification ObjectIds for query: {matching_classification_obj_ids}")
+                
+                # First, let's see what standards exist for this set and analyze their classifications
+                all_standards = await db.standards.find({"standard_set_id": standard_set_obj_id}).to_list(None)
+                logger.debug(f"Total standards in set before filtering: {len(all_standards)}")
+
+                # Log all standards and their classifications for debugging
+                logger.debug("All standards before filtering:")
+                for std in all_standards:
+                    logger.debug(f"  ID: {std.get('_id')}, Classifications: {std.get('classification_ids', [])}")
+
+                # Now do our filtered query - match if ANY classification matches or if universal
+                query = {
                     "standard_set_id": standard_set_obj_id,
                     "$or": [
-                        {"classification_ids": {"$in": matching_classification_ids}},
-                        {"classification_ids": {"$size": 0}}  # Universal standards
+                        # Match standards with any matching classification using individual $or conditions
+                        *[{"classification_ids": obj_id} for obj_id in matching_classification_obj_ids],
+                        # Match standards with empty/null classification array (universal standards)
+                        {"$or": [
+                            {"classification_ids": {"$size": 0}},
+                            {"classification_ids": {"$exists": False}},
+                            {"classification_ids": None}
+                        ]}
                     ]
-                }).to_list(None)
+                }
+                logger.debug(f"\nMongoDB query: {query}")
+                
+                standards = await db.standards.find(query).to_list(None)
+                
+                logger.debug(f"\nFound {len(standards)} matching standards after filtering")
+                logger.debug("Matched standards:")
+                for idx, std in enumerate(standards, 1):
+                    classifications = std.get('classification_ids', [])
+                    matches = []
+                    for cls_id in classifications:
+                        if cls_id in matching_classification_obj_ids:
+                            matches.append(cls_id)
+                    
+                    logger.debug(f"  ID: {std.get('_id')}")
+                    logger.debug(f"  Classifications: {classifications}")
+                    if matches:
+                        logger.debug(f"  Matched on classifications: {matches}")
+                    else:
+                        logger.debug("  Matched as universal standard (no classifications)")
                 
                 if not standards:
                     logger.warning(f"No matching standards found for standard set {standard_set_id}")
@@ -87,7 +129,8 @@ async def process_code_review(review_id: str, repository_url: str, standard_sets
                     codebase_file,
                     standards,
                     review_id,
-                    standard_set.get("name", "Unknown")
+                    standard_set.get("name", "Unknown"),
+                    matching_classification_ids
                 )
 
                 # Create compliance report

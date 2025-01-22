@@ -44,7 +44,6 @@ async def process_standard_set(standard_set_id: str, repository_url: str):
         
     except Exception as e:
         logger.error(f"Error processing standard set: {str(e)}", exc_info=True)
-        raise
 
 async def download_repository(repository_url: str) -> Path:
     """Download the repository to a temporary directory."""
@@ -110,7 +109,7 @@ async def process_standards(
             (root, file) 
             for root, _, files in os.walk(repo_path)
             for file in files 
-            if file.endswith('.md')
+            if file.endswith('.md') and not file.lower() == 'readme.md' and not file.lower() == 'contributing.md'
         ]
     
     # Process files
@@ -171,6 +170,10 @@ Standard Content:
 Please analyze the standard and determine which classifications apply. A standard can be "universal" (applies to all codebases) or have specific classifications.
 
 First, determine if this is a universal standard that applies to all codebases regardless of technology.
+- A universal standard is one that applies to all codebases regardless of technology, so it should be applied to all codebases.
+- Use the title and sub headers of the standard to help determine if it is universal.
+- For example, a "security" standard is universal because it applies to all codebases. "Docker" may be universal if it applies to all codebases AND 'Docker' is not in the Classifications list.
+- think "does this standard apply to all codebases regardless of technology?", if so, then return an empty list.
 If it is universal, return an empty list.
 If it is not universal, return a list of relevant classification names from the provided list.
 

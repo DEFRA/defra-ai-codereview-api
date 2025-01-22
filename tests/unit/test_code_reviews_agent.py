@@ -126,3 +126,52 @@ async def test_check_compliance_raises_error_without_api_key():
             await check_compliance(codebase_file, standards, review_id, standard_set_name)
 
         assert "ANTHROPIC_API_KEY" in str(exc_info.value)
+
+@pytest.mark.asyncio
+async def test_check_compliance_successful():
+    """
+    Test successful compliance check with Claude.
+
+    Given: Valid codebase and standards
+    When: Performing a compliance check
+    Then: Should generate and save report successfully
+    """
+    # Given
+    codebase_file = Path("test_codebase.txt")
+    standards = [{"_id": "test_standard", "text": "Test standard content"}]
+    review_id = "test_review_id"
+    standard_set_name = "test_standard_set"
+    expected_report = "Test compliance report"
+
+    # Create a properly mocked Anthropic client
+    mock_message = MagicMock()
+    mock_message.content = [MagicMock(text=expected_report)]
+
+    class MockMessages:
+        async def create(self, *args, **kwargs):
+            return mock_message
+
+    class MockAsyncAnthropic:
+        def __init__(self, api_key):
+            self.messages = MockMessages()
+
+    # When/Then
+    with patch('src.agents.code_reviews_agent.AsyncAnthropic', MockAsyncAnthropic), \
+         patch('builtins.open', create=True) as mock_open:
+
+        # Mock both read and write file operations
+        mock_read = MagicMock()
+        mock_read.read.return_value = "Test content"
+        mock_write = MagicMock()
+        mock_open.side_effect = [
+            MagicMock(__enter__=MagicMock(return_value=mock_read)),
+            MagicMock(__enter__=MagicMock(return_value=mock_write))
+        ]
+
+        with patch.dict('os.environ', {'ANTHROPIC_API_KEY': 'test_key'}):
+            report_file = await check_compliance(codebase_file, standards, review_id, standard_set_name)
+
+        # Verify report was saved
+        assert mock_open.call_count == 2  # Once for read, once for write
+        mock_write.write.assert_called_once_with(expected_report)
+        assert report_file.name == f"{review_id}-{standard_set_name}.md"
