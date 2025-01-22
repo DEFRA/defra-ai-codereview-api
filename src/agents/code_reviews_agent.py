@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 from typing import List, Dict, Any
 from datetime import datetime
+import asyncio
 from anthropic import AsyncAnthropic
 from src.logging_config import setup_logger
 from src.database import get_database
@@ -123,6 +124,9 @@ async def check_compliance(codebase_file: Path, standards: List[Dict[str, Any]],
             logger.debug(f"Completed standard {idx}/{len(standards)}: {standard['_id']}")
             logger.debug(f"Report length for standard {standard['_id']}: {len(report_text)} characters")
             logger.debug(f"Report preview: {report_text[:150]}...")
+            
+            # Add sleep between API calls to prevent rate limiting
+            await asyncio.sleep(10)  # Sleep for 1 second between calls
 
         # Log report statistics
         logger.info(f"Total reports generated: {len(reports)}")
