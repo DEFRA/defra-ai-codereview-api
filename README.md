@@ -49,6 +49,12 @@ pip install -r requirements.txt
 ```env
 MONGO_URI=mongodb://root:example@localhost:27017/
 ANTHROPIC_API_KEY=your_anthropic_api_key
+
+# Logging Configuration (all optional)
+ENABLE_FILE_LOGGING=true    # Enable/disable file logging (default: true)
+LOG_DIR=logs               # Directory for log files (default: logs)
+FILE_LOG_LEVEL=DEBUG       # Log level for file logging (default: DEBUG)
+CONSOLE_LOG_LEVEL=INFO     # Log level for console output (default: INFO)
 ```
 
 ## Running MongoDB

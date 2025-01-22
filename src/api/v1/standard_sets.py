@@ -1,4 +1,5 @@
 """Standard sets API endpoints."""
+import asyncio
 from fastapi import APIRouter, HTTPException, Depends, status
 from motor.motor_asyncio import AsyncIOMotorDatabase, AsyncIOMotorCollection
 from src.models.standard_set import StandardSet, StandardSetCreate, StandardSetWithStandards
@@ -20,9 +21,6 @@ router = APIRouter(prefix="/standard-sets", tags=["standard-sets"])
 
 def run_agent_process(standard_set_id: str, repository_url: str):
     """Run the agent process in a separate process."""
-    import asyncio
-    from src.agents.standards_agent import process_standard_set
-
     async def _run():
         try:
             await process_standard_set(standard_set_id, repository_url)
@@ -80,11 +78,16 @@ async def get_standard_sets(
 ):
     """Get all standard sets."""
     try:
-        cursor = collection.find({})
-        standard_sets = await cursor.to_list(length=None)
-        return standard_sets
+        try:
+            cursor = collection.find({})
+            standard_sets = await cursor.to_list(length=None)
+            return standard_sets
+        except DatabaseError as e:
+            logger.error(f"Database error getting standard sets: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) 
+        logger.error(f"Error getting standard sets: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{standard_set_id}", response_model=StandardSetWithStandards)
 async def get_standard_set(

@@ -8,9 +8,11 @@ from bson import ObjectId
 from fastapi import APIRouter, HTTPException
 from src.database import get_database
 from src.models.code_review import CodeReview, CodeReviewCreate, ReviewStatus, CodeReviewList
+from src.models.classification import Classification
 from src.logging_config import setup_logger
 from src.agents.git_repos_agent import process_repositories
 from src.agents.code_reviews_agent import check_compliance
+from src.agents.standards_classification_agent import analyze_codebase_classifications
 from multiprocessing import Process
 from datetime import timezone
 import os
@@ -19,6 +21,12 @@ UTC = timezone.utc
 logger = setup_logger(__name__)
 
 router = APIRouter()
+
+
+async def get_classifications(db: AsyncIOMotorDatabase):
+    """Get all classifications from database."""
+    raw_classifications = await db.classifications.find().to_list(None)
+    return [Classification.model_validate(doc) for doc in raw_classifications]
 
 
 async def process_code_review(review_id: str, repository_url: str, standard_sets: list[str]):
@@ -38,34 +46,56 @@ async def process_code_review(review_id: str, repository_url: str, standard_sets
         # Process repository
         codebase_file = await process_repositories(repository_url)
         
+        # Get all classifications
+        classifications = await get_classifications(db)
+        
+        # Analyze codebase to determine relevant classifications
+        matching_classification_ids = await analyze_codebase_classifications(
+            codebase_file.parent,  # Parent directory containing the codebase
+            classifications
+        )
+        logger.debug(f"Matching classification IDs: {matching_classification_ids}")
+        
         # Get standards from database for each standard set
         compliance_reports = []
         for standard_set_id in standard_sets:
             try:
+                # Convert string ID to ObjectId
+                standard_set_obj_id = ObjectId(standard_set_id)
+                
                 # Get standard set from database
-                standard_set = await db.standard_sets.find_one({"_id": ObjectId(standard_set_id)})
+                standard_set = await db.standard_sets.find_one({"_id": standard_set_obj_id})
                 if not standard_set:
                     logger.error(f"Standard set {standard_set_id} not found")
                     continue
+
+                # Get standards that match the classifications or are universal (empty classification_ids)
+                standards = await db.standards.find({
+                    "standard_set_id": standard_set_obj_id,
+                    "$or": [
+                        {"classification_ids": {"$in": matching_classification_ids}},
+                        {"classification_ids": {"$size": 0}}  # Universal standards
+                    ]
+                }).to_list(None)
                 
-                # Get standards for this set
-                standards = await db.standards.find({"standard_set_id": standard_set_id}).to_list(None)
                 if not standards:
-                    logger.error(f"No standards found for standard set {standard_set_id}")
+                    logger.warning(f"No matching standards found for standard set {standard_set_id}")
                     continue
 
                 # Check compliance
-                report_file = await check_compliance(codebase_file, standards, review_id, standard_set["name"])
-                
-                # Read the report content
-                with open(report_file, 'r', encoding='utf-8') as f:
-                    report_content = f.read()
-                
+                report_file = await check_compliance(
+                    codebase_file,
+                    standards,
+                    review_id,
+                    standard_set.get("name", "Unknown")
+                )
+
+                # Create compliance report
                 compliance_reports.append({
-                    "id": str(standard_set_id),
-                    "standard_set_name": standard_set["name"],
+                    "id": str(ObjectId()),
+                    "standard_set_name": standard_set.get("name", "Unknown"),
                     "file": str(report_file),
-                    "report": report_content
+                    "report": report_file.read_text()
                 })
 
             except Exception as e:
