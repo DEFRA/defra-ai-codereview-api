@@ -6,6 +6,7 @@ kanban-plugin: board
 
 ## To Do
 
+- [ ] add local LLM ollama dev for backend
 - [ ] Do we need to break down the standards file ingest into more granular standards (adding a loop over the file to have an LLM pull out individual standards)?
 - [ ] extend dependency.py injection file for the existing code review?
 - [ ] pull out the anthropic model into the .env file
