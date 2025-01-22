@@ -72,6 +72,17 @@ Relevant Files/Sections:
 async def check_compliance(codebase_file: Path, standards: List[Dict[str, Any]], review_id: str, standard_set_name: str, matching_classification_ids: List[str]) -> Path:
     """Check codebase compliance against standards using Anthropic's Claude."""
     try:
+        # Filter standards if LLM_TESTING is enabled
+        if os.getenv("LLM_TESTING", "false").lower() == "true":
+            testing_files = os.getenv("LLM_TESTING_STANDARDS_FILES", "").split(",")
+            filtered_standards = []
+            for standard in standards:
+                repository_path = standard.get('repository_path', '')
+                if any(test_file.strip() in repository_path for test_file in testing_files):
+                    filtered_standards.append(standard)
+            standards = filtered_standards
+            logger.info(f"LLM Testing enabled - filtered to {len(standards)} matching standards")
+
         # Read codebase content
         with open(codebase_file, 'r', encoding='utf-8') as f:
             codebase_content = f.read()
