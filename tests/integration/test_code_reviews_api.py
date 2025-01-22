@@ -72,6 +72,9 @@ async def test_process_code_review_success(
     repository_url = "https://github.com/example/repo"
     standard_sets = [str(ObjectId())]
     
+    # Create a fixed classification ID to use in both places
+    classification_id = ObjectId()
+    
     # Mock external functions
     async def mock_process_repositories(repo_url):
         mock_file = MagicMock()
@@ -79,9 +82,9 @@ async def test_process_code_review_success(
         return mock_file
 
     async def mock_analyze_classifications(path, classifications):
-        return ["class1", "class2"]
+        return [str(classification_id)]  # Return the same classification ID
 
-    async def mock_check_compliance(codebase, standards, review_id, name):
+    async def mock_check_compliance(codebase, standards, review_id, name, matching_classification_ids):
         mock_file = MagicMock()
         mock_file.read_text.return_value = "Compliance report"
         return mock_file
@@ -103,7 +106,7 @@ async def test_process_code_review_success(
         "_id": ObjectId(),
         "standard_set_id": ObjectId(standard_sets[0]),
         "name": "Test Standard",
-        "classification_ids": ["class1"]
+        "classification_ids": [classification_id]  # Use the same classification ID
     })
 
     # When
@@ -194,7 +197,7 @@ async def test_process_code_review_standard_set_not_found(
         return mock_file
 
     async def mock_analyze_classifications(path, classifications):
-        return ["class1", "class2"]
+        return [str(ObjectId()), str(ObjectId())]
 
     # When
     with (
@@ -247,7 +250,7 @@ async def test_process_code_review_no_matching_standards(
         return mock_file
 
     async def mock_analyze_classifications(path, classifications):
-        return ["class1", "class2"]
+        return [str(ObjectId()), str(ObjectId())]
 
     # When
     with (
@@ -297,7 +300,7 @@ async def test_process_code_review_compliance_check_error(
         "_id": ObjectId(),
         "standard_set_id": ObjectId(standard_sets[0]),
         "name": "Test Standard",
-        "classification_ids": ["class1"]
+        "classification_ids": [ObjectId()]
     })
 
     # Mock external functions
@@ -307,9 +310,9 @@ async def test_process_code_review_compliance_check_error(
         return mock_file
 
     async def mock_analyze_classifications(path, classifications):
-        return ["class1", "class2"]
+        return [str(ObjectId()), str(ObjectId())]
 
-    async def mock_check_compliance(codebase, standards, review_id, name):
+    async def mock_check_compliance(codebase, standards, review_id, name, matching_classification_ids):
         raise Exception("Compliance check failed")
 
     # When
