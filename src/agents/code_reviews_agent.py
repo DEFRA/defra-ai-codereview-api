@@ -151,8 +151,7 @@ async def check_compliance(codebase_file: Path, standards: List[Dict[str, Any]],
         # Create header section with classification names
         header = f"""# {standard_set_name} Code Review
 Date: {current_time}
-
-# Matched Classifications: {", ".join(classification_names) if classification_names else "None"}
+Matched Classifications: {", ".join(classification_names) if classification_names else "None"}
 
 """
         
