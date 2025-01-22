@@ -8,9 +8,11 @@ from bson import ObjectId
 from fastapi import APIRouter, HTTPException
 from src.database import get_database
 from src.models.code_review import CodeReview, CodeReviewCreate, ReviewStatus, CodeReviewList
+from src.models.classification import Classification
 from src.logging_config import setup_logger
 from src.agents.git_repos_agent import process_repositories
 from src.agents.code_reviews_agent import check_compliance
+from src.agents.standards_classification_agent import analyze_codebase_classifications
 from multiprocessing import Process
 from datetime import timezone
 import os
@@ -19,6 +21,12 @@ UTC = timezone.utc
 logger = setup_logger(__name__)
 
 router = APIRouter()
+
+
+async def get_classifications(db: AsyncIOMotorDatabase):
+    """Get all classifications from database."""
+    raw_classifications = await db.classifications.find().to_list(None)
+    return [Classification.model_validate(doc) for doc in raw_classifications]
 
 
 async def process_code_review(review_id: str, repository_url: str, standard_sets: list[str]):
@@ -38,34 +46,99 @@ async def process_code_review(review_id: str, repository_url: str, standard_sets
         # Process repository
         codebase_file = await process_repositories(repository_url)
         
+        # Get all classifications
+        classifications = await get_classifications(db)
+        
+        # Analyze codebase to determine relevant classifications
+        matching_classification_ids = await analyze_codebase_classifications(
+            codebase_file.parent,  # Parent directory containing the codebase
+            classifications
+        )
+        logger.debug(f"Matching classification IDs: {matching_classification_ids}")
+        
         # Get standards from database for each standard set
         compliance_reports = []
         for standard_set_id in standard_sets:
             try:
+                # Convert string ID to ObjectId
+                standard_set_obj_id = ObjectId(standard_set_id)
+                
                 # Get standard set from database
-                standard_set = await db.standard_sets.find_one({"_id": ObjectId(standard_set_id)})
+                standard_set = await db.standard_sets.find_one({"_id": standard_set_obj_id})
                 if not standard_set:
                     logger.error(f"Standard set {standard_set_id} not found")
                     continue
+
+                # Get standards that match the classifications or are universal (empty classification_ids)
+                logger.debug(f"Querying standards for standard set {standard_set_id}")
+                logger.debug(f"Matching classification IDs: {matching_classification_ids}")
                 
-                # Get standards for this set
-                standards = await db.standards.find({"standard_set_id": standard_set_id}).to_list(None)
+                # Convert classification IDs to ObjectIds for MongoDB query
+                matching_classification_obj_ids = [ObjectId(id) for id in matching_classification_ids]
+                logger.debug(f"Using classification ObjectIds for query: {matching_classification_obj_ids}")
+                
+                # First, let's see what standards exist for this set and analyze their classifications
+                all_standards = await db.standards.find({"standard_set_id": standard_set_obj_id}).to_list(None)
+                logger.debug(f"Total standards in set before filtering: {len(all_standards)}")
+
+                # Log all standards and their classifications for debugging
+                logger.debug("All standards before filtering:")
+                for std in all_standards:
+                    logger.debug(f"  ID: {std.get('_id')}, Classifications: {std.get('classification_ids', [])}")
+
+                # Now do our filtered query - match if ANY classification matches or if universal
+                query = {
+                    "standard_set_id": standard_set_obj_id,
+                    "$or": [
+                        # Match standards with any matching classification using individual $or conditions
+                        *[{"classification_ids": obj_id} for obj_id in matching_classification_obj_ids],
+                        # Match standards with empty/null classification array (universal standards)
+                        {"$or": [
+                            {"classification_ids": {"$size": 0}},
+                            {"classification_ids": {"$exists": False}},
+                            {"classification_ids": None}
+                        ]}
+                    ]
+                }
+                logger.debug(f"\nMongoDB query: {query}")
+                
+                standards = await db.standards.find(query).to_list(None)
+                
+                logger.debug(f"\nFound {len(standards)} matching standards after filtering")
+                logger.debug("Matched standards:")
+                for idx, std in enumerate(standards, 1):
+                    classifications = std.get('classification_ids', [])
+                    matches = []
+                    for cls_id in classifications:
+                        if cls_id in matching_classification_obj_ids:
+                            matches.append(cls_id)
+                    
+                    logger.debug(f"  ID: {std.get('_id')}")
+                    logger.debug(f"  Classifications: {classifications}")
+                    if matches:
+                        logger.debug(f"  Matched on classifications: {matches}")
+                    else:
+                        logger.debug("  Matched as universal standard (no classifications)")
+                
                 if not standards:
-                    logger.error(f"No standards found for standard set {standard_set_id}")
+                    logger.warning(f"No matching standards found for standard set {standard_set_id}")
                     continue
 
                 # Check compliance
-                report_file = await check_compliance(codebase_file, standards, review_id, standard_set["name"])
-                
-                # Read the report content
-                with open(report_file, 'r', encoding='utf-8') as f:
-                    report_content = f.read()
-                
+                report_file = await check_compliance(
+                    codebase_file,
+                    standards,
+                    review_id,
+                    standard_set.get("name", "Unknown"),
+                    matching_classification_ids
+                )
+
+                # Create compliance report
                 compliance_reports.append({
-                    "id": str(standard_set_id),
-                    "standard_set_name": standard_set["name"],
+                    "id": str(ObjectId()),
+                    "standard_set_name": standard_set.get("name", "Unknown"),
                     "file": str(report_file),
-                    "report": report_content
+                    "report": report_file.read_text()
                 })
 
             except Exception as e:

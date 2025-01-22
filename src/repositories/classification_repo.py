@@ -74,6 +74,11 @@ class ClassificationRepository:
         try:
             if not ObjectId.is_valid(id):
                 raise ValueError("Invalid ObjectId format")
+            
+            # Check if document exists first
+            doc = await self.collection.find_one({"_id": ObjectId(id)})
+            if not doc:
+                return False
                 
             result = await self.collection.delete_one({"_id": ObjectId(id)})
             return result.deleted_count > 0

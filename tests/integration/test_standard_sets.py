@@ -1,13 +1,20 @@
 """Integration tests for the standard sets endpoints."""
 from datetime import datetime, timezone
-from unittest.mock import patch
+from unittest.mock import patch, Mock, AsyncMock
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from mongomock_motor import AsyncMongoMockClient
 from bson import ObjectId
 from src.repositories.standard_set_repo import StandardSetRepository
-from src.dependencies import get_database, get_standard_set_repo
+from src.dependencies import get_database, get_standard_set_repo, get_standard_sets_collection
+from src.repositories.errors import DatabaseError, RepositoryError
+from src.api.v1.standard_sets import run_agent_process_sync
+from src.agents.standards_agent import process_standard_set
+from src.agents.git_repos_agent import clone_repo
+import multiprocessing
+import asyncio
+import logging
 
 @pytest.fixture
 async def mock_mongodb():
@@ -29,19 +36,23 @@ async def test_create_standard_set_succeeds_with_valid_input(
         "custom_prompt": "Analyze code for security issues..."
     }
 
+    mock_process = Mock()
     # When
-    test_app.dependency_overrides[get_database] = lambda: mock_mongodb
-    response = test_client.post("/api/v1/standard-sets", json=test_standard_set)
-    test_app.dependency_overrides.clear()
+    with patch('src.api.v1.standard_sets.Process', return_value=mock_process):
+        test_app.dependency_overrides[get_database] = lambda: mock_mongodb
+        response = test_client.post("/api/v1/standard-sets", json=test_standard_set)
+        test_app.dependency_overrides.clear()
 
-    # Then
-    assert response.status_code == 201
-    created_set = response.json()
-    assert created_set["name"] == test_standard_set["name"]
-    assert created_set["repository_url"] == test_standard_set["repository_url"]
-    assert created_set["custom_prompt"] == test_standard_set["custom_prompt"]
-    assert "created_at" in created_set
-    assert "updated_at" in created_set
+        # Then
+        assert response.status_code == 201
+        created_set = response.json()
+        assert created_set["name"] == test_standard_set["name"]
+        assert created_set["repository_url"] == test_standard_set["repository_url"]
+        assert created_set["custom_prompt"] == test_standard_set["custom_prompt"]
+        assert "created_at" in created_set
+        assert "updated_at" in created_set
+        # Verify process was started
+        mock_process.start.assert_called_once()
 
 @pytest.mark.asyncio
 async def test_create_standard_set_replaces_existing_with_same_name(
@@ -72,22 +83,26 @@ async def test_create_standard_set_replaces_existing_with_same_name(
         "custom_prompt": "New prompt..."
     }
 
+    mock_process = Mock()
     # When
-    test_app.dependency_overrides[get_database] = lambda: mock_mongodb
-    response = test_client.post("/api/v1/standard-sets", json=new_set)
-    test_app.dependency_overrides.clear()
+    with patch('src.api.v1.standard_sets.Process', return_value=mock_process):
+        test_app.dependency_overrides[get_database] = lambda: mock_mongodb
+        response = test_client.post("/api/v1/standard-sets", json=new_set)
+        test_app.dependency_overrides.clear()
 
-    # Then
-    assert response.status_code == 201
-    updated_set = response.json()
-    assert updated_set["name"] == new_set["name"]
-    assert updated_set["repository_url"] == new_set["repository_url"]
-    assert updated_set["custom_prompt"] == new_set["custom_prompt"]
+        # Then
+        assert response.status_code == 201
+        updated_set = response.json()
+        assert updated_set["name"] == new_set["name"]
+        assert updated_set["repository_url"] == new_set["repository_url"]
+        assert updated_set["custom_prompt"] == new_set["custom_prompt"]
 
-    # Verify only one document exists and it's the updated one
-    all_sets = await mock_mongodb["standard_sets"].find({}).to_list(length=None)
-    assert len(all_sets) == 1
-    assert all_sets[0]["repository_url"] == new_set["repository_url"]
+        # Verify only one document exists and it's the updated one
+        all_sets = await mock_mongodb["standard_sets"].find({}).to_list(length=None)
+        assert len(all_sets) == 1
+        assert all_sets[0]["repository_url"] == new_set["repository_url"]
+        # Verify process was started
+        mock_process.start.assert_called_once()
 
 @pytest.mark.asyncio
 async def test_create_standard_set_fails_with_missing_required_fields(
@@ -135,16 +150,20 @@ async def test_verify_mock_database_isolation(
         "custom_prompt": "Test prompt"
     }
 
+    mock_process = Mock()
     # When using mock database
-    test_app.dependency_overrides[get_database] = lambda: mock_mongodb
-    response = test_client.post("/api/v1/standard-sets", json=test_standard_set)
-    
-    # Then
-    assert response.status_code == 201
-    
-    # Verify data exists in mock
-    mock_result = await mock_mongodb["standard_sets"].find_one({"name": "Test Isolation Set"})
-    assert mock_result is not None
+    with patch('src.api.v1.standard_sets.Process', return_value=mock_process):
+        test_app.dependency_overrides[get_database] = lambda: mock_mongodb
+        response = test_client.post("/api/v1/standard-sets", json=test_standard_set)
+        
+        # Then
+        assert response.status_code == 201
+        
+        # Verify data exists in mock
+        mock_result = await mock_mongodb["standard_sets"].find_one({"name": "Test Isolation Set"})
+        assert mock_result is not None
+        # Verify process was started
+        mock_process.start.assert_called_once()
     
     # Clear the mock override and verify isolation
     test_app.dependency_overrides.clear()
@@ -155,7 +174,7 @@ async def test_verify_mock_database_isolation(
     
     # Check that the test data is not in the response
     real_data = response.json()
-    assert not any(item["name"] == "Test Isolation Set" for item in real_data) 
+    assert not any(item["name"] == "Test Isolation Set" for item in real_data)
 
 @pytest.mark.asyncio
 async def test_get_standard_set_by_id_basic(
@@ -444,4 +463,181 @@ async def test_delete_standard_set_handles_invalid_id_format(
     # Then
     assert response.status_code == 400
     data = response.json()
-    assert "Invalid ObjectId format" in data["detail"] 
+    assert "Invalid ObjectId format" in data["detail"]
+
+@pytest.mark.asyncio
+async def test_run_agent_process_handles_exceptions(caplog):
+    """Test that run_agent_process handles exceptions properly."""
+    # Given
+    standard_set_id = str(ObjectId())
+    repository_url = "https://example.com/repo"
+    caplog.set_level(logging.ERROR)
+
+    # When/Then
+    with patch('git.Repo.clone_from', side_effect=Exception("Test error")):
+        # Run the function - should not raise exception
+        await process_standard_set(standard_set_id, repository_url)
+        
+        # Verify error was logged
+        assert "Error processing standard set: Test error" in caplog.text
+
+@pytest.mark.asyncio
+async def test_create_standard_set_handles_repository_validation_error(
+    test_app: FastAPI,
+    test_client: TestClient,
+    mock_mongodb: AsyncMongoMockClient
+) -> None:
+    """Test handling of validation errors during standard set creation."""
+    # Given
+    test_standard_set = {
+        "name": "Test Set",
+        "repository_url": "invalid-url",
+        "custom_prompt": "Test prompt"
+    }
+    
+    # Mock repository to raise validation error
+    async def mock_create(*args, **kwargs):
+        raise RepositoryError("Validation failed")
+
+    mock_process = Mock()
+    with patch.object(StandardSetRepository, 'create', side_effect=mock_create), \
+         patch('src.api.v1.standard_sets.Process', return_value=mock_process):
+        # When
+        test_app.dependency_overrides[get_database] = lambda: mock_mongodb
+        response = test_client.post("/api/v1/standard-sets", json=test_standard_set)
+        test_app.dependency_overrides.clear()
+        
+        # Then
+        assert response.status_code == 400
+        assert "Validation failed" in response.json()["detail"]
+        # Process should not be started since we have a validation error
+        mock_process.start.assert_not_called()
+
+@pytest.mark.asyncio
+async def test_create_standard_set_handles_unexpected_error(
+    test_app: FastAPI,
+    test_client: TestClient,
+    mock_mongodb: AsyncMongoMockClient
+) -> None:
+    """Test handling of unexpected errors during standard set creation."""
+    # Given
+    test_standard_set = {
+        "name": "Test Set",
+        "repository_url": "https://example.com",
+        "custom_prompt": "Test prompt"
+    }
+    
+    # Mock repository to raise unexpected error
+    async def mock_create(*args, **kwargs):
+        raise Exception("Unexpected error")
+    
+    with patch.object(StandardSetRepository, 'create', side_effect=mock_create):
+        # When
+        test_app.dependency_overrides[get_database] = lambda: mock_mongodb
+        response = test_client.post("/api/v1/standard-sets", json=test_standard_set)
+        test_app.dependency_overrides.clear()
+        
+        # Then
+        assert response.status_code == 500
+        assert response.json()["detail"] == "Internal server error"
+
+@pytest.mark.asyncio
+async def test_get_standard_sets_handles_database_error(
+    test_app: FastAPI,
+    test_client: TestClient,
+    mock_mongodb: AsyncMongoMockClient
+) -> None:
+    """Test handling of database errors when getting standard sets."""
+    # Given
+    async def mock_get_all(*args, **kwargs):
+        raise DatabaseError("Database error")
+
+    repo = StandardSetRepository(mock_mongodb.standard_sets)
+    with patch.object(StandardSetRepository, 'get_all', side_effect=mock_get_all):
+        # When
+        test_app.dependency_overrides[get_database] = lambda: mock_mongodb
+        test_app.dependency_overrides[get_standard_set_repo] = lambda: repo
+        response = test_client.get("/api/v1/standard-sets")
+        test_app.dependency_overrides.clear()
+
+        # Then
+        assert response.status_code == 500
+        assert "Database error" in response.json()["detail"]
+
+@pytest.mark.asyncio
+async def test_get_standard_set_handles_unexpected_error(
+    test_app: FastAPI,
+    test_client: TestClient,
+    mock_mongodb: AsyncMongoMockClient
+) -> None:
+    """Test handling of unexpected errors when getting a standard set."""
+    # Given
+    test_id = str(ObjectId())
+    
+    # Mock repository to raise unexpected error
+    async def mock_get_by_id(*args, **kwargs):
+        raise Exception("Unexpected error")
+    
+    repo = StandardSetRepository(mock_mongodb.standard_sets)
+    with patch.object(StandardSetRepository, 'get_by_id', side_effect=mock_get_by_id):
+        # When
+        test_app.dependency_overrides[get_database] = lambda: mock_mongodb
+        test_app.dependency_overrides[get_standard_set_repo] = lambda: repo
+        response = test_client.get(f"/api/v1/standard-sets/{test_id}")
+        test_app.dependency_overrides.clear()
+        
+        # Then
+        assert response.status_code == 500
+        assert response.json()["detail"] == "Internal server error"
+
+@pytest.mark.asyncio
+async def test_delete_standard_set_handles_database_error(
+    test_app: FastAPI,
+    test_client: TestClient,
+    mock_mongodb: AsyncMongoMockClient
+) -> None:
+    """Test handling of database errors when deleting a standard set."""
+    # Given
+    test_id = str(ObjectId())
+    
+    # Mock repository to raise database error
+    async def mock_delete(*args, **kwargs):
+        raise DatabaseError("Database error")
+    
+    repo = StandardSetRepository(mock_mongodb.standard_sets)
+    with patch.object(StandardSetRepository, 'delete', side_effect=mock_delete):
+        # When
+        test_app.dependency_overrides[get_database] = lambda: mock_mongodb
+        test_app.dependency_overrides[get_standard_set_repo] = lambda: repo
+        response = test_client.delete(f"/api/v1/standard-sets/{test_id}")
+        test_app.dependency_overrides.clear()
+        
+        # Then
+        assert response.status_code == 500
+        assert "Database error" in response.json()["detail"]
+
+@pytest.mark.asyncio
+async def test_delete_standard_set_handles_unexpected_error(
+    test_app: FastAPI,
+    test_client: TestClient,
+    mock_mongodb: AsyncMongoMockClient
+) -> None:
+    """Test handling of unexpected errors when deleting a standard set."""
+    # Given
+    test_id = str(ObjectId())
+    
+    # Mock repository to raise unexpected error
+    async def mock_delete(*args, **kwargs):
+        raise Exception("Unexpected error")
+    
+    repo = StandardSetRepository(mock_mongodb.standard_sets)
+    with patch.object(StandardSetRepository, 'delete', side_effect=mock_delete):
+        # When
+        test_app.dependency_overrides[get_database] = lambda: mock_mongodb
+        test_app.dependency_overrides[get_standard_set_repo] = lambda: repo
+        response = test_client.delete(f"/api/v1/standard-sets/{test_id}")
+        test_app.dependency_overrides.clear()
+        
+        # Then
+        assert response.status_code == 500
+        assert response.json()["detail"] == "Internal server error" 

@@ -67,6 +67,31 @@ async def test_flatten_repository(mock_repo_structure, tmp_path):
     assert "test.js" not in content
 
 @pytest.mark.asyncio
+async def test_flatten_repository_handles_file_errors(mock_repo_structure, tmp_path):
+    """Test repository flattening handles file reading errors gracefully."""
+    # Given
+    output_file = tmp_path / "output.txt"
+    test_file = mock_repo_structure / "test_error.py"
+    test_file.write_text("test content")
+    
+    original_open = open
+    def mock_open_side_effect(*args, **kwargs):
+        if str(test_file) in str(args[0]):
+            raise UnicodeDecodeError('utf-8', b'test', 0, 1, 'test error')
+        return original_open(*args, **kwargs)
+    
+    mock_open = MagicMock(side_effect=mock_open_side_effect)
+    
+    with patch('builtins.open', mock_open):
+        # When
+        await flatten_repository(mock_repo_structure, output_file)
+        
+        # Then
+        assert output_file.exists()
+        content = output_file.read_text()
+        assert "test_error.py" not in content
+
+@pytest.mark.asyncio
 async def test_clone_repo():
     """Test repository cloning."""
     with patch('src.agents.git_repos_agent.git.Repo') as mock_repo:
@@ -77,6 +102,25 @@ async def test_clone_repo():
         await clone_repo(repo_url, local_path)
         
         mock_repo.clone_from.assert_called_once_with(repo_url, str(local_path))
+
+@pytest.mark.asyncio
+async def test_clone_repo_removes_existing_directory(tmp_path):
+    """Test clone_repo removes existing directory before cloning."""
+    # Given
+    target_dir = tmp_path / "existing_repo"
+    target_dir.mkdir()
+    (target_dir / "old_file.txt").write_text("old content")
+    
+    with patch('src.agents.git_repos_agent.git.Repo') as mock_repo:
+        mock_repo.clone_from = MagicMock()
+        repo_url = "https://github.com/test/repo.git"
+        
+        # When
+        await clone_repo(repo_url, target_dir)
+        
+        # Then
+        mock_repo.clone_from.assert_called_once_with(repo_url, str(target_dir))
+        assert not (target_dir / "old_file.txt").exists()
 
 @pytest.mark.asyncio
 async def test_process_repositories():
