@@ -24,6 +24,7 @@ from src.agents.standards_agent import (
 )
 from src.models.classification import Classification
 from src.repositories.classification_repo import ClassificationRepository
+import asyncio
 
 @pytest.fixture
 def mock_db():
@@ -197,7 +198,7 @@ async def test_analyze_standard_universal(mock_classifications):
     
     # Create a mock client
     mock_client = MagicMock()
-    mock_client.messages.create = AsyncMock(return_value=mock_message)
+    mock_client.messages.create = MagicMock(return_value=mock_message)
     
     # Execute
     with patch('src.agents.standards_agent.Anthropic', return_value=mock_client), \
@@ -227,12 +228,13 @@ async def test_analyze_standard_specific_classifications(mock_classifications):
         def strip(self):
             return self.text
     
+    # Create a message with content that matches the expected structure
     mock_message = MagicMock()
     mock_message.content = [MockContent("Python")]
     
-    # Create a mock client that returns the message directly
+    # Create a mock client and configure messages.create to return our message
     mock_client = MagicMock()
-    mock_client.messages.create = AsyncMock(return_value=mock_message)
+    mock_client.messages.create = MagicMock(return_value=mock_message)
     
     # Execute
     with patch('src.agents.standards_agent.Anthropic', return_value=mock_client), \
@@ -241,7 +243,7 @@ async def test_analyze_standard_specific_classifications(mock_classifications):
         
         # Verify
         assert result == ["Python"]
-        assert mock_client.messages.create.called
+        mock_client.messages.create.assert_called_once()
 
 @pytest.mark.asyncio
 async def test_analyze_standard_handles_llm_error():
@@ -251,7 +253,7 @@ async def test_analyze_standard_handles_llm_error():
     classifications = ["Python"]
     
     mock_client = MagicMock()
-    mock_client.messages.create = AsyncMock(side_effect=Exception("API Error"))
+    mock_client.messages.create = MagicMock(side_effect=Exception("API Error"))
     
     # Execute
     with patch('src.agents.standards_agent.Anthropic', return_value=mock_client), \
