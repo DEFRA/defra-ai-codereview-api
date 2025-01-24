@@ -64,7 +64,6 @@ async def list_classifications(
            description="Delete a classification",
            responses={
                200: {"description": "Classification deleted successfully"},
-               404: {"description": "Classification not found"},
                400: {"description": "Invalid ObjectId format"}
            })
 async def delete_classification(
@@ -73,27 +72,15 @@ async def delete_classification(
 ):
     """Delete a classification."""
     try:
-        deleted = await repo.delete(id)
-        if not deleted:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Classification not found"
-            )
+        await repo.delete(id)
         return {"status": "success"}
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid ObjectId format"
         )
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Error deleting classification: {str(e)}")
-        if "Classification not found" in str(e):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Classification not found"
-            )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete classification"

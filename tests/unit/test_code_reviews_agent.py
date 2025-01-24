@@ -187,6 +187,7 @@ async def test_check_compliance_successful():
     with patch('src.agents.code_reviews_agent.AsyncAnthropic', MockAsyncAnthropic), \
          patch('builtins.open', create=True) as mock_open, \
          patch('src.database.get_database', mock_get_db), \
+         patch('asyncio.sleep', AsyncMock()), \
          patch.dict('os.environ', {'ANTHROPIC_API_KEY': 'test_key', 'LLM_TESTING': 'false'}):
 
         # Mock both read and write file operations
@@ -202,3 +203,4 @@ async def test_check_compliance_successful():
 
         # Verify report was saved
         assert report_file == codebase_file.parent / f"{review_id}-{standard_set_name}.md"
+        assert mock_open.call_count == 2  # One for read, one for write

@@ -640,4 +640,77 @@ async def test_delete_standard_set_handles_unexpected_error(
         
         # Then
         assert response.status_code == 500
-        assert response.json()["detail"] == "Internal server error" 
+        assert response.json()["detail"] == "Internal server error"
+
+def test_run_agent_process_sync_executes_process_standard_set():
+    """Test that run_agent_process_sync properly executes process_standard_set."""
+    # Given
+    standard_set_id = str(ObjectId())
+    repository_url = "https://github.com/test/repo"
+    
+    # When
+    mock_process = Mock()
+    with patch('src.api.v1.standard_sets.process_standard_set', mock_process), \
+         patch('src.api.v1.standard_sets.asyncio.run') as mock_run:
+        # Call the sync function
+        run_agent_process_sync(standard_set_id, repository_url)
+        
+        # Then
+        mock_run.assert_called_once()
+        mock_process.assert_called_once_with(standard_set_id, repository_url)
+
+@pytest.mark.asyncio
+async def test_create_standard_set_handles_general_repository_error(
+    test_app: FastAPI,
+    test_client: TestClient,
+    mock_mongodb: AsyncMongoMockClient
+) -> None:
+    """Test handling of general repository errors during standard set creation."""
+    # Given
+    test_standard_set = {
+        "name": "Test Set",
+        "repository_url": "https://github.com/test/repo",
+        "custom_prompt": "Test prompt"
+    }
+
+    # When
+    async def mock_create(*args, **kwargs):
+        raise RepositoryError("General repository error")
+
+    repo = StandardSetRepository(mock_mongodb.standard_sets)
+    mock_process = Mock()
+    with patch.object(StandardSetRepository, 'create', side_effect=mock_create), \
+         patch.object(StandardSetRepository, 'find_by_name', return_value=None), \
+         patch('src.api.v1.standard_sets.Process', return_value=mock_process), \
+         patch('src.api.v1.standard_sets.process_standard_set', new_callable=AsyncMock) as mock_process_standard:
+            mock_process_standard.return_value = None
+            test_app.dependency_overrides[get_database] = lambda: mock_mongodb
+            response = test_client.post("/api/v1/standard-sets", json=test_standard_set)
+            test_app.dependency_overrides.clear()
+
+    # Then
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Internal server error"}
+    mock_process.start.assert_not_called()
+
+@pytest.mark.asyncio
+async def test_get_standard_sets_handles_general_error(
+    test_app: FastAPI,
+    test_client: TestClient,
+    mock_mongodb: AsyncMongoMockClient
+) -> None:
+    """Test handling of general errors when getting all standard sets."""
+    # Given
+    repo = StandardSetRepository(mock_mongodb.standard_sets)
+    
+    # When
+    mock_get_all = AsyncMock(side_effect=Exception("Unexpected error"))
+
+    with patch.object(StandardSetRepository, 'get_all', mock_get_all):
+        test_app.dependency_overrides[get_standard_set_repo] = lambda: repo
+        response = test_client.get("/api/v1/standard-sets")
+        test_app.dependency_overrides.clear()
+
+    # Then
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Unexpected error"} 
