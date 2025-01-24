@@ -184,7 +184,7 @@ Only return the list, no other text."""
         # Get response from Claude
         message = client.messages.create(
             model="claude-3-5-sonnet-20241022",
-            #  max_tokens=300,
+            max_tokens=8192,
             temperature=0,
             system="You are a standards analysis expert that helps determine which technology classifications apply to software development standards.",
             messages=[{

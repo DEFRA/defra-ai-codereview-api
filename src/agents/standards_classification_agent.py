@@ -77,7 +77,7 @@ Codebase Files and Content:
         logger.info("Starting codebase classification analysis")
         message = await anthropic.messages.create(
             model="claude-3-5-sonnet-20241022",
-            # max_tokens=1000,
+            max_tokens=8192,
             system=SYSTEM_PROMPT,
             temperature=0,
             messages=[{"role": "user", "content": prompt}]

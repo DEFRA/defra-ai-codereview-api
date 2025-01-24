@@ -114,7 +114,7 @@ async def check_compliance(codebase_file: Path, standards: List[Dict[str, Any]],
             logger.info(f"Starting compliance check for standard {idx}/{len(standards)}: {standard['_id']}")
             message = await anthropic.messages.create(
                 model="claude-3-5-sonnet-20241022",
-                # max_tokens=4000,
+                max_tokens=8192,
                 system=SYSTEM_PROMPT,
                 temperature=0,
                 messages=[{"role": "user", "content": prompt}]
