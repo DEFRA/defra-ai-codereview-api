@@ -12,7 +12,6 @@ kanban-plugin: board
 
 ## To Do
 
-- [ ] max tokens limit in llm call?
 - [ ] merge 5.5 branch into standards ingest
 - [ ] Investigate and fix the rate limit issue - bedrock?
 - [ ] Get running on CDP dev w/ bedrock
@@ -36,6 +35,7 @@ kanban-plugin: board
 ## Done
 
 **Complete**
+- [x] max tokens limit in llm call?
 - [x] [[standards-ingest-prd]]
 - [ ] fix async issue
 - [ ] current branch:
