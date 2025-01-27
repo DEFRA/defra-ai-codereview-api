@@ -26,6 +26,7 @@ kanban-plugin: board
 - [ ] Check out the errors.py file and how error type handling works
 - [ ] review .cursorrules
 - [ ] pip freeze, python lib mgmt - add to .cursorrules?
+- [ ] Update Docs in code checker tool
 
 
 ## Doing
