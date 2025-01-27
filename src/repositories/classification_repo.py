@@ -21,7 +21,7 @@ class ClassificationRepository:
             # Check if classification with same name exists
             existing = await self.get_by_name(classification.name)
             if existing:
-                raise ValueError(f"Classification with name '{classification.name}' already exists")
+                return existing
 
             now = datetime.now(UTC)
             doc = classification.model_dump()
