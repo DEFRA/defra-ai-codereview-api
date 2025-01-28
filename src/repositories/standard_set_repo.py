@@ -137,8 +137,14 @@ class StandardSetRepository:
             
             # Get associated standards
             standards = await self.standards_collection.find(
-                {"standard_set_id": str(standard_set["_id"])}
+                {"standard_set_id": id}
             ).to_list(None)
+            
+            # Convert ObjectIds to strings in standards
+            for standard in standards:
+                standard["_id"] = str(standard["_id"])
+                if "classification_ids" in standard:
+                    standard["classification_ids"] = [str(id) for id in standard["classification_ids"]]
             
             # Convert ObjectId to string
             standard_set["_id"] = str(standard_set["_id"])

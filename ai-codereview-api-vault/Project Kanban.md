@@ -12,7 +12,7 @@ kanban-plugin: board
 
 ## To Do
 
-- [ ] merge 5.5 branch into standards ingest
+- [ ] clean up branch - update docs (adams prompt), fix tests, new database backup
 - [ ] Investigate and fix the rate limit issue - bedrock?
 - [ ] Get running on CDP dev w/ bedrock
 - [ ] add local LLM ollama dev for backend
@@ -24,9 +24,7 @@ kanban-plugin: board
 - [ ] Hooks: Linting, formatting, commit hooks for python api backend
 		- pylint --rcfile=/path/to/.pylintrc src tests
 - [ ] Check out the errors.py file and how error type handling works
-- [ ] review .cursorrules
 - [ ] pip freeze, python lib mgmt - add to .cursorrules?
-- [ ] Update Docs in code checker tool
 
 
 ## Doing
@@ -47,6 +45,9 @@ kanban-plugin: board
 	
 	Add tests and test coverage
 - [ ] Update cursor rules to tell it to always ensure it using the latest versions of libraries in the requirements.txt
+- [x] merge 5.5 branch into standards ingest
+- [x] review .cursorrules
+- [x] Update Docs in code checker tool
 
 
 

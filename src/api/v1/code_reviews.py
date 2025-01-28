@@ -7,12 +7,13 @@ from datetime import datetime
 from bson import ObjectId
 from fastapi import APIRouter, HTTPException
 from src.database import get_database
-from src.models.code_review import CodeReview, CodeReviewCreate, ReviewStatus, CodeReviewList
+from src.models.code_review import CodeReview, CodeReviewCreate, ReviewStatus, CodeReviewList, PyObjectId
 from src.models.classification import Classification
 from src.logging_config import setup_logger
 from src.agents.git_repos_agent import process_repositories
 from src.agents.code_reviews_agent import check_compliance
 from src.agents.standards_classification_agent import analyze_codebase_classifications
+from src.utils.id_validation import ensure_object_id
 from multiprocessing import Process
 from datetime import timezone
 import os
@@ -36,7 +37,7 @@ async def process_code_review(review_id: str, repository_url: str, standard_sets
 
         # Update status to in progress
         await db.code_reviews.update_one(
-            {"_id": ObjectId(review_id)},
+            {"_id": ensure_object_id(review_id)},
             {"$set": {
                 "status": ReviewStatus.IN_PROGRESS,
                 "updated_at": datetime.now(UTC)
@@ -60,8 +61,8 @@ async def process_code_review(review_id: str, repository_url: str, standard_sets
         compliance_reports = []
         for standard_set_id in standard_sets:
             try:
-                # Convert string ID to ObjectId
-                standard_set_obj_id = ObjectId(standard_set_id)
+                # Convert string ID to ObjectId using validation utility
+                standard_set_obj_id = ensure_object_id(standard_set_id)
                 
                 # Get standard set from database
                 standard_set = await db.standard_sets.find_one({"_id": standard_set_obj_id})
@@ -72,10 +73,7 @@ async def process_code_review(review_id: str, repository_url: str, standard_sets
                 # Get standards that match the classifications or are universal (empty classification_ids)
                 logger.debug(f"Querying standards for standard set {standard_set_id}")
                 logger.debug(f"Matching classification IDs: {matching_classification_ids}")
-                
-                # Convert classification IDs to ObjectIds for MongoDB query
-                matching_classification_obj_ids = [ObjectId(id) for id in matching_classification_ids]
-                logger.debug(f"Using classification ObjectIds for query: {matching_classification_obj_ids}")
+                logger.debug(f"Using classification ObjectIds for query: {matching_classification_ids}")
                 
                 # First, let's see what standards exist for this set and analyze their classifications
                 all_standards = await db.standards.find({"standard_set_id": standard_set_obj_id}).to_list(None)
@@ -91,7 +89,7 @@ async def process_code_review(review_id: str, repository_url: str, standard_sets
                     "standard_set_id": standard_set_obj_id,
                     "$or": [
                         # Match standards with any matching classification using individual $or conditions
-                        *[{"classification_ids": obj_id} for obj_id in matching_classification_obj_ids],
+                        *[{"classification_ids": obj_id} for obj_id in matching_classification_ids],
                         # Match standards with empty/null classification array (universal standards)
                         {"$or": [
                             {"classification_ids": {"$size": 0}},
@@ -110,7 +108,7 @@ async def process_code_review(review_id: str, repository_url: str, standard_sets
                     classifications = std.get('classification_ids', [])
                     matches = []
                     for cls_id in classifications:
-                        if cls_id in matching_classification_obj_ids:
+                        if cls_id in matching_classification_ids:
                             matches.append(cls_id)
                     
                     logger.debug(f"  ID: {std.get('_id')}")
@@ -135,7 +133,7 @@ async def process_code_review(review_id: str, repository_url: str, standard_sets
 
                 # Create compliance report
                 compliance_reports.append({
-                    "id": str(ObjectId()),
+                    "_id": ObjectId(),  # Create a new MongoDB ObjectId
                     "standard_set_name": standard_set.get("name", "Unknown"),
                     "file": str(report_file),
                     "report": report_file.read_text()
@@ -145,20 +143,27 @@ async def process_code_review(review_id: str, repository_url: str, standard_sets
                 logger.error(f"Error processing standard set {standard_set_id}: {str(e)}")
                 continue
 
-        # Update review with results
+        # Convert compliance report IDs to ObjectId
+        for report in compliance_reports:
+            if '_id' in report and not isinstance(report['_id'], ObjectId):
+                report['_id'] = ObjectId(report['_id'])
+
+        # Update the code review with compliance reports
         await db.code_reviews.update_one(
-            {"_id": ObjectId(review_id)},
-            {"$set": {
-                "status": ReviewStatus.COMPLETED,
-                "compliance_reports": compliance_reports,
-                "updated_at": datetime.now(UTC)
-            }}
+            {"_id": ensure_object_id(review_id)},
+            {
+                "$set": {
+                    "compliance_reports": compliance_reports,
+                    "status": ReviewStatus.COMPLETED,
+                    "updated_at": datetime.now(UTC)
+                }
+            }
         )
 
     except Exception as e:
         logger.error(f"Error processing code review {review_id}: {str(e)}")
         await db.code_reviews.update_one(
-            {"_id": ObjectId(review_id)},
+            {"_id": ensure_object_id(review_id)},
             {"$set": {
                 "status": ReviewStatus.FAILED,
                 "updated_at": datetime.now(UTC)
@@ -191,10 +196,19 @@ async def create_code_review(code_review: CodeReviewCreate):
     logger.info(f"Creating code review for repository: {code_review.repository_url}")
     try:
         db = await get_database()
-        # Create initial document
+        # Create initial document with properly formatted standard_sets
+        standard_sets_info = []
+        for set_id in code_review.standard_sets:
+            standard_set = await db.standard_sets.find_one({"_id": ObjectId(set_id)})
+            if standard_set:
+                standard_sets_info.append({
+                    "_id": ObjectId(set_id),
+                    "name": standard_set["name"]
+                })
+
         review_dict = {
             "repository_url": code_review.repository_url,
-            "standard_sets": code_review.standard_sets,
+            "standard_sets": standard_sets_info,
             "status": ReviewStatus.STARTED,
             "compliance_reports": [],
             "created_at": datetime.now(UTC),
@@ -247,22 +261,39 @@ async def get_code_reviews():
             # Check for valid _id
             if review.get('_id') and str(review['_id']).strip():
                 review['_id'] = str(review['_id'])
-                
+
+                # Convert compliance report IDs to ObjectId
+                for report in review.get('compliance_reports', []):
+                    if '_id' in report and not isinstance(report['_id'], ObjectId):
+                        report['_id'] = ObjectId(report['_id'])
+
                 # Fetch standard set names
                 standard_sets_info = []
-                for standard_set_id in review.get('standard_sets', []):
-                    standard_set = await db.standard_sets.find_one({"_id": ObjectId(standard_set_id)})
-                    if standard_set:
+                for standard_set in review.get('standard_sets', []):
+                    # If standard_set is already an object with _id and name, use it directly
+                    if isinstance(standard_set, dict) and '_id' in standard_set and 'name' in standard_set:
                         standard_sets_info.append({
                             "id": str(standard_set['_id']),
-                            "name": standard_set.get('name', 'Unknown Standard Set')
+                            "name": standard_set['name']
                         })
+                    # Otherwise, try to fetch from database
                     else:
-                        logger.warning(f"Standard set {standard_set_id} not found")
-                        standard_sets_info.append({
-                            "id": standard_set_id,
-                            "name": "Unknown Standard Set"
-                        })
+                        standard_set_id = standard_set
+                        if isinstance(standard_set_id, ObjectId):
+                            standard_set_id = str(standard_set_id)
+                        
+                        standard_set_doc = await db.standard_sets.find_one({"_id": ObjectId(standard_set_id)})
+                        if standard_set_doc:
+                            standard_sets_info.append({
+                                "id": str(standard_set_doc['_id']),
+                                "name": standard_set_doc.get('name', 'Unknown Standard Set')
+                            })
+                        else:
+                            logger.warning(f"Standard set {standard_set_id} not found")
+                            standard_sets_info.append({
+                                "id": str(standard_set_id),
+                                "name": "Unknown Standard Set"
+                            })
                 
                 review['standard_sets'] = standard_sets_info
                 valid_reviews.append(review)
@@ -306,21 +337,38 @@ async def get_code_review(_id: str):
         # Convert _id to string
         review['_id'] = str(review['_id'])
 
+        # Convert compliance report IDs to ObjectId
+        for report in review.get('compliance_reports', []):
+            if '_id' in report and not isinstance(report['_id'], ObjectId):
+                report['_id'] = ObjectId(report['_id'])
+
         # Fetch standard set names
         standard_sets_info = []
-        for standard_set_id in review.get('standard_sets', []):
-            standard_set = await db.standard_sets.find_one({"_id": ObjectId(standard_set_id)})
-            if standard_set:
+        for standard_set in review.get('standard_sets', []):
+            # If standard_set is already an object with _id and name, use it directly
+            if isinstance(standard_set, dict) and '_id' in standard_set and 'name' in standard_set:
                 standard_sets_info.append({
                     "id": str(standard_set['_id']),
-                    "name": standard_set.get('name', 'Unknown Standard Set')
+                    "name": standard_set['name']
                 })
+            # Otherwise, try to fetch from database
             else:
-                logger.warning(f"Standard set {standard_set_id} not found")
-                standard_sets_info.append({
-                    "id": standard_set_id,
-                    "name": "Unknown Standard Set"
-                })
+                standard_set_id = standard_set
+                if isinstance(standard_set_id, ObjectId):
+                    standard_set_id = str(standard_set_id)
+                
+                standard_set_doc = await db.standard_sets.find_one({"_id": ObjectId(standard_set_id)})
+                if standard_set_doc:
+                    standard_sets_info.append({
+                        "id": str(standard_set_doc['_id']),
+                        "name": standard_set_doc.get('name', 'Unknown Standard Set')
+                    })
+                else:
+                    logger.warning(f"Standard set {standard_set_id} not found")
+                    standard_sets_info.append({
+                        "id": str(standard_set_id),
+                        "name": "Unknown Standard Set"
+                    })
         
         review['standard_sets'] = standard_sets_info
         return CodeReview(**review)

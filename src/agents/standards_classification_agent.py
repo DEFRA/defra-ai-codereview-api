@@ -8,9 +8,7 @@ from src.models.classification import Classification
 
 logger = setup_logger(__name__)
 
-SYSTEM_PROMPT = """You are a technology stack analysis expert.
-Analyze codebases to determine which technologies and programming languages are used.
-Consider all aspects including code files, configuration files, and dependencies."""
+SYSTEM_PROMPT = """You are a technology stack analysis expert."""
 
 async def analyze_codebase_classifications(
     codebase_path: Path,
@@ -46,11 +44,6 @@ async def analyze_codebase_classifications(
         # Generate prompt
         prompt = f"""Analyze this codebase and identify which technology classifications are used from the list below.
 
-CRITICAL:
-- Your response must ONLY contain a comma-separated list of matching classifications ONLY from the list below.
-- DO NOT include any other text, explanations, or formatting.
-- Only include classifications that are present in the codebase.
-
 Examples of valid responses:
 "Python, React, Docker"
 "Java, Spring Boot"
@@ -61,7 +54,13 @@ Available Classifications:
 {", ".join([c.name for c in classifications])}
 
 Codebase Files and Content:
-{codebase_content}"""
+{codebase_content}
+
+CRITICAL:
+- Your response must ONLY contain a comma-separated list of matching classifications ONLY from the list below.
+- DO NOT include any other text, explanations, or formatting.
+- Only include classifications that are present in the codebase.
+"""
 
         # Log the prompt and available classifications
         logger.debug("Available classifications: %s", [c.name for c in classifications])
@@ -113,7 +112,7 @@ Codebase Files and Content:
         logger.debug("Parsed classification names: %s", classification_names)
         
         matching_ids = [
-            str(c.id) for c in classifications 
+            c.id for c in classifications 
             if c.name in classification_names
         ]
         
