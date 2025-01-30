@@ -1,8 +1,8 @@
 """Standards Classification Agent for determining relevant technology classifications."""
 import os
 from pathlib import Path
-from typing import List
-from anthropic import AsyncAnthropic
+from typing import List, Dict, Any
+from src.utils.anthropic_client import AnthropicClient
 from src.utils.logging_utils import setup_logger
 from src.models.classification import Classification
 
@@ -65,25 +65,12 @@ CRITICAL:
         # Log the prompt and available classifications
         logger.debug("Available classifications: %s", [c.name for c in classifications])
 
-        # Get Anthropic client
-        api_key = os.getenv("ANTHROPIC_API_KEY")
-        if not api_key:
-            raise ValueError("ANTHROPIC_API_KEY environment variable not set")
-
-        anthropic = AsyncAnthropic(api_key=api_key)
-
         # Call Claude for analysis
         logger.info("Starting codebase classification analysis")
-        message = await anthropic.messages.create(
-            model="claude-3-5-sonnet-20241022",
-            max_tokens=8192,
-            system=SYSTEM_PROMPT,
-            temperature=0,
-            messages=[{"role": "user", "content": prompt}]
-        )
-
+        response = await AnthropicClient.create_message(prompt=prompt, system_prompt=SYSTEM_PROMPT)
+        
         # Parse response
-        response = message.content[0].text.strip()
+        response = response.strip()
         logger.debug("Raw LLM response:\n%s", response)
         
         if not response:

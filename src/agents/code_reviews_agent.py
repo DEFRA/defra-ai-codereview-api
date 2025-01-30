@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import List, Dict, Any
 from datetime import datetime
 import asyncio
-from anthropic import AsyncAnthropic
+from src.utils.anthropic_client import AnthropicClient
 from src.utils.logging_utils import setup_logger
 from src.database.database_utils import get_database
 from bson import ObjectId
@@ -95,13 +95,6 @@ async def check_compliance(codebase_file: Path, standards: List[Dict[str, Any]],
         for idx, std in enumerate(standards, 1):
             preview = std.get('text', '')[:150] + '...' if len(std.get('text', '')) > 150 else std.get('text', '')
             logger.info(f"{idx}. Standard ID: {std.get('_id')}, Preview: {preview}")
-
-        # Get Anthropic client
-        api_key = os.getenv("ANTHROPIC_API_KEY")
-        if not api_key:
-            raise ValueError("ANTHROPIC_API_KEY environment variable not set")
-
-        anthropic = AsyncAnthropic(api_key=api_key)
         
         # Process each standard individually and collect reports
         reports = []
@@ -112,22 +105,15 @@ async def check_compliance(codebase_file: Path, standards: List[Dict[str, Any]],
 
             # Call Claude for analysis
             logger.info(f"Starting compliance check for standard {idx}/{len(standards)}: {standard['_id']}")
-            message = await anthropic.messages.create(
-                model="claude-3-5-sonnet-20241022",
-                max_tokens=8192,
-                system=SYSTEM_PROMPT,
-                temperature=0,
-                messages=[{"role": "user", "content": prompt}]
-            )
+            report_text = await AnthropicClient.create_message(prompt=prompt, system_prompt=SYSTEM_PROMPT)
             
-            report_text = message.content[0].text
             reports.append(report_text)
             logger.debug(f"Completed standard {idx}/{len(standards)}: {standard['_id']}")
             logger.debug(f"Report length for standard {standard['_id']}: {len(report_text)} characters")
             logger.debug(f"Report preview: {report_text[:150]}...")
             
             # Add sleep between API calls to prevent rate limiting
-            await asyncio.sleep(10)  # Sleep for 1 second between calls
+            await asyncio.sleep(10)  # Sleep for 10 seconds between calls
 
         # Log report statistics
         logger.info(f"Total reports generated: {len(reports)}")
