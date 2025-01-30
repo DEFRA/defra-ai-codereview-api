@@ -18,6 +18,8 @@ from src.agents.code_reviews_agent import (
 import asyncio
 from bson import ObjectId
 from typing import Dict
+from mongomock_motor import AsyncMongoMockClient
+from src.database.database_utils import get_database
 
 # Test Constants
 TEST_MONGODB_ID = "507f1f77bcf86cd799439011"
@@ -129,13 +131,23 @@ def mock_anthropic_success_client():
 
 
 @pytest.fixture
-def mock_db_client():
-    """Provide mock database client."""
-    mock_db = MagicMock()
-    mock_db.classifications.find.return_value.to_list = AsyncMock(return_value=[
-        {"_id": ObjectId(TEST_MONGODB_ID), "name": "Test Classification"}
-    ])
-    return AsyncMock(return_value=mock_db)
+async def mock_mongodb():
+    """Provide mock MongoDB client."""
+    client = AsyncMongoMockClient()
+    db = client.get_database('test_db')
+
+    # Setup test data
+    await db.classifications.insert_one({
+        "_id": ObjectId(TEST_MONGODB_ID),
+        "name": "Test Classification"
+    })
+
+    # Patch get_database to return our mock
+    async def mock_get_database():
+        return db
+
+    with patch('src.agents.code_reviews_agent.get_database', mock_get_database):
+        yield client
 
 
 @pytest.fixture
@@ -276,7 +288,7 @@ class TestComplianceChecking:
     async def test_handles_api_errors(
         self,
         mock_anthropic_error_client,
-        mock_db_client,
+        mock_mongodb,
         mock_file_operations
     ):
         """Test handling of API failures."""
@@ -287,7 +299,7 @@ class TestComplianceChecking:
         # When/Then
         with patch('src.agents.code_reviews_agent.AsyncAnthropic', mock_anthropic_error_client), \
                 patch('builtins.open', create=True, new=mock_file_operations), \
-                patch('src.database.database_utils.get_database', mock_db_client), \
+                patch('src.database.database_utils.get_database', mock_mongodb), \
                 patch.dict('os.environ', {'ANTHROPIC_API_KEY': TEST_API_KEY, 'LLM_TESTING': 'false'}):
 
             with pytest.raises(AuthenticationError) as exc_info:
@@ -304,7 +316,7 @@ class TestComplianceChecking:
     @pytest.mark.asyncio
     async def test_raises_error_without_api_key(
         self,
-        mock_db_client,
+        mock_mongodb,
         mock_file_operations
     ):
         """Test handling of missing API key."""
@@ -315,7 +327,7 @@ class TestComplianceChecking:
         # When/Then
         with patch.dict('os.environ', {'LLM_TESTING': 'false'}, clear=True), \
                 patch('builtins.open', create=True, new=mock_file_operations), \
-                patch('src.database.database_utils.get_database', mock_db_client):
+                patch('src.database.database_utils.get_database', mock_mongodb):
 
             with pytest.raises(ValueError) as exc_info:
                 await check_compliance(
@@ -332,7 +344,7 @@ class TestComplianceChecking:
     async def test_successful_compliance_check(
         self,
         mock_anthropic_success_client,
-        mock_db_client,
+        mock_mongodb,
         mock_file_operations
     ):
         """Test successful compliance check and report generation."""
@@ -343,9 +355,7 @@ class TestComplianceChecking:
         # When
         with patch('src.agents.code_reviews_agent.AsyncAnthropic', mock_anthropic_success_client), \
                 patch('builtins.open', create=True, new=mock_file_operations), \
-                patch('src.database.database_utils.get_database', mock_db_client), \
-                patch('asyncio.sleep', AsyncMock()), \
-                patch.dict('os.environ', {'ANTHROPIC_API_KEY': TEST_API_KEY, 'LLM_TESTING': 'false'}):
+                patch('asyncio.sleep', AsyncMock()):
 
             report_file = await check_compliance(
                 codebase_file,
