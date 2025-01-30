@@ -12,6 +12,7 @@ from src.api.dependencies import (
     get_database,
     get_classifications_collection,
     get_standard_sets_collection,
+    get_repository,
 )
 from src.config.config import settings
 from src.repositories.classification_repo import ClassificationRepository
@@ -66,17 +67,13 @@ async def test_get_database():
 
     Given: MongoDB connection settings
     When: Getting database connection
-    Then: Should yield database and close client
+    Then: Should return database instance
     """
     mock_client = AsyncMock(spec=AsyncIOMotorClient)
     mock_db = AsyncMock()
 
     mock_client.__getitem__.return_value = mock_db
 
-    with patch('src.api.dependencies.AsyncIOMotorClient', return_value=mock_client):
-        async for db in get_database():
-            assert db == mock_db
-            mock_client.__getitem__.assert_called_once_with(
-                settings.MONGO_INITDB_DATABASE)
-
-        mock_client.close.assert_called_once()
+    with patch('src.database.database_utils.init_database', return_value=mock_db):
+        db = await get_database()
+        assert db == mock_db

@@ -128,12 +128,8 @@ async def test_process_standards_llm_testing_mode(mock_db, mock_classifications,
 
     with patch.dict('os.environ', {'LLM_TESTING': 'true', 'LLM_TESTING_STANDARDS_FILES': 'coding_principles.md'}), \
             patch('src.agents.standards_agent.analyze_standard', mock_analyze), \
-            patch('src.config.settings') as mock_settings:
-        # Configure settings
-        mock_llm_testing = PropertyMock(return_value=True)
-        mock_llm_files = PropertyMock(return_value="coding_principles.md")
-        type(mock_settings).LLM_TESTING = mock_llm_testing
-        type(mock_settings).LLM_TESTING_STANDARDS_FILES = mock_llm_files
+            patch('src.agents.standards_agent.settings.LLM_TESTING', True), \
+            patch('src.agents.standards_agent.settings.LLM_TESTING_STANDARDS_FILES', 'coding_principles.md'):
 
         # Execute
         await process_standards(mock_db, mock_repo_path, standard_set_id, mock_classifications)
@@ -311,7 +307,7 @@ async def test_process_standard_set_handles_error(mock_db):
     repository_url = "https://example.com/repo.git"
 
     with patch('src.agents.standards_agent.download_repository', side_effect=Exception("Clone error")), \
-            patch('src.database.get_database', return_value=mock_db):
+            patch('src.database.database_utils.get_database', return_value=mock_db):
         # Execute
         await process_standard_set(standard_set_id, repository_url)
 
@@ -333,11 +329,15 @@ async def test_process_standard_set_success(mock_db, mock_repo_path):
     ]
     mock_get_classifications = AsyncMock(return_value=mock_classifications)
 
+    # Mock the database initialization chain
+    mock_init_db = AsyncMock(return_value=mock_db)
+
     with patch('src.agents.standards_agent.download_repository', mock_download), \
             patch('src.agents.standards_agent.get_classifications', mock_get_classifications), \
             patch('src.agents.standards_agent.process_standards') as mock_process, \
             patch('src.agents.standards_agent.cleanup_repository') as mock_cleanup, \
-            patch('src.database.get_database', return_value=mock_db):
+            patch('src.database.database_utils.get_database', return_value=mock_db), \
+            patch('src.database.database_utils.init_database', mock_init_db):
         # Execute
         await process_standard_set(standard_set_id, repository_url)
 
