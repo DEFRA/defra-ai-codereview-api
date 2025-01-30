@@ -134,6 +134,174 @@ Example:
 
 ## Database Schema
 
+### Collections Schema Validation
+
+#### Classifications Collection
+```typescript
+{
+    bsonType: "object",
+    required: ["name"],
+    properties: {
+        _id: {
+            bsonType: "objectId",
+            description: "Unique identifier"
+        },
+        name: {
+            bsonType: "string",
+            description: "Classification name"
+        }
+    }
+}
+```
+
+#### Standard Sets Collection
+```typescript
+{
+    bsonType: "object",
+    required: ["name", "repository_url"],
+    properties: {
+        _id: {
+            bsonType: "objectId",
+            description: "Unique identifier"
+        },
+        name: {
+            bsonType: "string",
+            description: "Standard set name"
+        },
+        repository_url: {
+            bsonType: "string",
+            description: "URL of the repository containing standards"
+        },
+        custom_prompt: {
+            bsonType: "string",
+            description: "Custom prompt for LLM processing"
+        },
+        created_at: {
+            bsonType: "date",
+            description: "Creation timestamp"
+        },
+        updated_at: {
+            bsonType: "date",
+            description: "Last update timestamp"
+        }
+    }
+}
+```
+
+#### Standards Collection
+```typescript
+{
+    bsonType: "object",
+    required: ["text", "repository_path", "standard_set_id", "classification_ids", "created_at", "updated_at"],
+    properties: {
+        _id: {
+            bsonType: "objectId",
+            description: "Unique identifier"
+        },
+        text: {
+            bsonType: "string",
+            description: "Standard text content"
+        },
+        repository_path: {
+            bsonType: "string",
+            description: "Path to the standard in the repository"
+        },
+        standard_set_id: {
+            bsonType: "objectId",
+            description: "Reference to the standard set"
+        },
+        classification_ids: {
+            bsonType: "array",
+            items: {
+                bsonType: "objectId",
+                description: "Reference to classifications"
+            },
+            description: "List of classification references"
+        },
+        created_at: {
+            bsonType: "date",
+            description: "Creation timestamp"
+        },
+        updated_at: {
+            bsonType: "date",
+            description: "Last update timestamp"
+        }
+    }
+}
+```
+
+#### Code Reviews Collection
+```typescript
+{
+    bsonType: "object",
+    required: ["repository_url", "status", "standard_sets", "created_at", "updated_at"],
+    properties: {
+        _id: {
+            bsonType: "objectId",
+            description: "Unique identifier"
+        },
+        repository_url: {
+            bsonType: "string",
+            description: "Repository URL to analyze"
+        },
+        status: {
+            enum: ["started", "in_progress", "completed", "failed"],
+            description: "Current review status"
+        },
+        standard_sets: {
+            bsonType: "array",
+            items: {
+                bsonType: "object",
+                required: ["_id", "name"],
+                properties: {
+                    _id: {
+                        bsonType: "objectId",
+                        description: "Standard set identifier"
+                    },
+                    name: {
+                        bsonType: "string",
+                        description: "Name of the standard set"
+                    }
+                }
+            }
+        },
+        compliance_reports: {
+            bsonType: "array",
+            items: {
+                bsonType: "object",
+                required: ["_id", "standard_set_name", "file", "report"],
+                properties: {
+                    _id: {
+                        bsonType: "objectId",
+                        description: "Report identifier"
+                    },
+                    standard_set_name: {
+                        bsonType: "string",
+                        description: "Name of the standard set"
+                    },
+                    file: {
+                        bsonType: "string",
+                        description: "File path being reviewed"
+                    },
+                    report: {
+                        bsonType: "string",
+                        description: "Detailed compliance report"
+                    }
+                }
+            }
+        },
+        created_at: {
+            bsonType: "date",
+            description: "Creation timestamp"
+        },
+        updated_at: {
+            bsonType: "date",
+            description: "Last update timestamp"
+        }
+    }
+}
+```
+
 ### Collections Diagram
 ```mermaid
 erDiagram

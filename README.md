@@ -77,6 +77,17 @@ docker-compose down
 
 The MongoDB data will persist in a named volume `code_review_mongodb_data`.
 
+### MongoDB Schema Validation
+
+The database uses schema validation to ensure data integrity:
+
+- **Classifications**: Stores technology/language classifications
+- **Standard Sets**: Contains predefined sets of standards with repository links
+- **Standards**: Individual standards with text content and classifications
+- **Code Reviews**: Review requests and results with compliance reports
+
+Schema validation is automatically applied during database initialisation.
+
 ## Running the API
 
 Start the FastAPI server:

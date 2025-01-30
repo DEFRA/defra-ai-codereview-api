@@ -46,9 +46,16 @@ tests/
 - **Dependencies**: Motor (MongoDB async driver)
 
 #### database_init.py
-- **Purpose**: Database initialization and setup
-- **Functionality**: Creates collections and indexes
-- **Dependencies**: MongoDB
+- **Purpose**: Database initialization and schema validation
+- **Functionality**: 
+  - Creates MongoDB collections with schema validation
+  - Defines validation schemas for:
+    - Classifications
+    - Standard Sets
+    - Standards
+    - Code Reviews
+  - Handles collection creation and schema updates
+- **Dependencies**: MongoDB, Motor
 
 #### dependencies.py
 - **Purpose**: FastAPI dependency injection
