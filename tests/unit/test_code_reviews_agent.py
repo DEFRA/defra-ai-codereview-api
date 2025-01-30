@@ -17,12 +17,27 @@ from src.agents.code_reviews_agent import (
 )
 import asyncio
 from bson import ObjectId
+from typing import Dict
+
+# Test Constants
+TEST_MONGODB_ID = "507f1f77bcf86cd799439011"
+TEST_REVIEW_ID = "test_review_id"
+TEST_STANDARD_SET = "test_standard_set"
+TEST_API_KEY = "test_key"
+
+# Common Instructions - used to make assertions more flexible
+COMPLIANCE_INSTRUCTIONS = [
+    "Compare the entire codebase",
+    "Compare the codebase",
+    "Analyze the codebase"
+]
+
 
 @pytest.fixture
-def mock_standard_content():
+def mock_standard_content() -> str:
     """
     Provide mock standard content for testing.
-    
+
     Returns:
         str: A sample standards document with requirements
     """
@@ -31,11 +46,12 @@ def mock_standard_content():
 - Requirement 1
 - Requirement 2"""
 
+
 @pytest.fixture
-def mock_codebase_content():
+def mock_codebase_content() -> str:
     """
     Provide mock codebase content for testing.
-    
+
     Returns:
         str: A sample Python file content
     """
@@ -43,37 +59,36 @@ def mock_codebase_content():
 def test():
     print("Hello World")"""
 
-@pytest.mark.asyncio
-async def test_generate_user_prompt_includes_required_components():
-    """Test that generate_user_prompt includes all required components."""
-    # Given
-    standard = {"_id": "test_standard", "text": "Test standard content"}
-    codebase_content = "print('Hello World')"
 
-    # When
-    prompt = await generate_user_prompt(standard, codebase_content)
-
-    # Then
-    assert "Test standard content" in prompt
-    assert "print('Hello World')" in prompt
-    assert "Standard test_standard" in prompt
-
-@pytest.mark.asyncio
-async def test_check_compliance_handles_api_errors():
+@pytest.fixture
+def compliance_colors() -> Dict[str, str]:
     """
-    Test handling of API failures.
+    Provide standard compliance color codes.
 
-    Given: API that raises an error
-    When: Performing a compliance check
-    Then: Should return error report with details
+    Returns:
+        Dict[str, str]: Mapping of compliance status to color codes
     """
-    # Given
-    codebase_file = Path("test_codebase.txt")
-    standards = [{"_id": "test_standard", "text": "Test standard content"}]
-    review_id = "test_review_id"
-    standard_set_name = "test_standard_set"
-    matching_classification_ids = ["507f1f77bcf86cd799439011"]  # Valid MongoDB ObjectId
+    return {
+        "yes": "#00703c",
+        "no": "#d4351c",
+        "partial": "#1d70b8"
+    }
 
+
+@pytest.fixture
+def standard_id() -> str:
+    """
+    Provide standard test ID.
+
+    Returns:
+        str: Test standard identifier
+    """
+    return "test_standard"
+
+
+@pytest.fixture
+def mock_anthropic_error_client():
+    """Provide mock Anthropic client that raises auth error."""
     error_response = {
         'type': 'error',
         'error': {
@@ -82,7 +97,6 @@ async def test_check_compliance_handles_api_errors():
         }
     }
 
-    # Create a mock client that raises AuthenticationError
     class MockMessages:
         async def create(self, *args, **kwargs):
             raise AuthenticationError(
@@ -95,112 +109,216 @@ async def test_check_compliance_handles_api_errors():
         def __init__(self, api_key):
             self.messages = MockMessages()
 
-    # Mock database operations
-    mock_db = MagicMock()
-    mock_db.classifications.find.return_value.to_list = AsyncMock(return_value=[
-        {"_id": ObjectId("507f1f77bcf86cd799439011"), "name": "Test Classification"}
-    ])
-    mock_get_db = AsyncMock(return_value=mock_db)
+    return MockAsyncAnthropic
 
-    # When/Then
-    with patch('src.agents.code_reviews_agent.AsyncAnthropic', MockAsyncAnthropic), \
-         patch('builtins.open', create=True) as mock_open, \
-         patch('src.database.get_database', mock_get_db), \
-         patch.dict('os.environ', {'ANTHROPIC_API_KEY': 'test_key', 'LLM_TESTING': 'false'}):
 
-        mock_open.return_value.__enter__.return_value.read.return_value = "Test content"
-        with pytest.raises(AuthenticationError) as exc_info:
-            await check_compliance(codebase_file, standards, review_id, standard_set_name, matching_classification_ids)
-
-        assert "invalid x-api-key" in str(exc_info.value)
-
-@pytest.mark.asyncio
-async def test_check_compliance_raises_error_without_api_key():
-    """
-    Test handling of missing API key.
-
-    Given: No API key in environment
-    When: Attempting a compliance check
-    Then: Should raise ValueError with clear message
-    """
-    # Given
-    codebase_file = Path("test_codebase.txt")
-    standards = [{"_id": "test_standard", "text": "Test standard content"}]
-    review_id = "test_review_id"
-    standard_set_name = "test_standard_set"
-    matching_classification_ids = ["507f1f77bcf86cd799439011"]  # Valid MongoDB ObjectId
-
-    # Mock database operations
-    mock_db = MagicMock()
-    mock_db.classifications.find.return_value.to_list = AsyncMock(return_value=[
-        {"_id": ObjectId("507f1f77bcf86cd799439011"), "name": "Test Classification"}
-    ])
-    mock_get_db = AsyncMock(return_value=mock_db)
-
-    # When/Then
-    with patch.dict('os.environ', {'LLM_TESTING': 'false'}, clear=True), \
-         patch('builtins.open', create=True) as mock_open, \
-         patch('src.database.get_database', mock_get_db):
-        mock_open.return_value.__enter__.return_value.read.return_value = "Test content"
-        with pytest.raises(ValueError) as exc_info:
-            await check_compliance(codebase_file, standards, review_id, standard_set_name, matching_classification_ids)
-
-        assert "ANTHROPIC_API_KEY" in str(exc_info.value)
-
-@pytest.mark.asyncio
-async def test_check_compliance_successful():
-    """
-    Test successful compliance check with Claude.
-
-    Given: Valid codebase and standards
-    When: Performing a compliance check
-    Then: Should generate and save report successfully
-    """
-    # Given
-    codebase_file = Path("test_codebase.txt")
-    standards = [{"_id": "test_standard", "text": "Test standard content"}]
-    review_id = "test_review_id"
-    standard_set_name = "test_standard_set"
-    matching_classification_ids = ["507f1f77bcf86cd799439011"]  # Valid MongoDB ObjectId
-    expected_report = "Test compliance report"
-
-    # Create a properly mocked Anthropic client
-    mock_message = MagicMock()
-    mock_message.content = [MagicMock(text=expected_report)]
-
+@pytest.fixture
+def mock_anthropic_success_client():
+    """Provide mock Anthropic client that returns success."""
     class MockMessages:
         async def create(self, *args, **kwargs):
+            mock_message = MagicMock()
+            mock_message.content = [MagicMock(text="Test compliance report")]
             return mock_message
 
     class MockAsyncAnthropic:
         def __init__(self, api_key):
             self.messages = MockMessages()
 
-    # Mock database operations
+    return MockAsyncAnthropic
+
+
+@pytest.fixture
+def mock_db_client():
+    """Provide mock database client."""
     mock_db = MagicMock()
     mock_db.classifications.find.return_value.to_list = AsyncMock(return_value=[
-        {"_id": ObjectId("507f1f77bcf86cd799439011"), "name": "Test Classification"}
+        {"_id": ObjectId(TEST_MONGODB_ID), "name": "Test Classification"}
     ])
-    mock_get_db = AsyncMock(return_value=mock_db)
+    return AsyncMock(return_value=mock_db)
 
-    # When/Then
-    with patch('src.agents.code_reviews_agent.AsyncAnthropic', MockAsyncAnthropic), \
-         patch('builtins.open', create=True) as mock_open, \
-         patch('src.database.get_database', mock_get_db), \
-         patch('asyncio.sleep', AsyncMock()), \
-         patch.dict('os.environ', {'ANTHROPIC_API_KEY': 'test_key', 'LLM_TESTING': 'false'}):
 
-        # Mock both read and write file operations
-        mock_read = MagicMock()
-        mock_read.read.return_value = "Test content"
-        mock_write = MagicMock()
-        mock_open.side_effect = [
-            MagicMock(__enter__=MagicMock(return_value=mock_read)),
-            MagicMock(__enter__=MagicMock(return_value=mock_write))
-        ]
+@pytest.fixture
+def mock_file_operations():
+    """Provide mock file operations."""
+    mock_read = MagicMock()
+    mock_read.read.return_value = "Test content"
+    mock_write = MagicMock()
 
-        report_file = await check_compliance(codebase_file, standards, review_id, standard_set_name, matching_classification_ids)
+    mock_open = MagicMock()
+    mock_open.side_effect = [
+        MagicMock(__enter__=MagicMock(return_value=mock_read)),
+        MagicMock(__enter__=MagicMock(return_value=mock_write))
+    ]
 
-        # Verify report was saved
-        assert report_file == codebase_file.parent / f"{review_id}-{standard_set_name}.md"
-        assert mock_open.call_count == 2  # One for read, one for write
+    return mock_open
+
+
+@pytest.mark.prompt_generation
+class TestPromptGeneration:
+    """Tests for prompt generation functionality."""
+
+    @pytest.mark.asyncio
+    async def test_prompt_includes_required_components(
+        self,
+        mock_standard_content,
+        mock_codebase_content,
+        compliance_colors,
+        standard_id
+    ):
+        """Test that generate_user_prompt includes all required components."""
+        # Given
+        standard = {"_id": standard_id, "text": mock_standard_content}
+
+        # When
+        prompt = await generate_user_prompt(standard, mock_codebase_content)
+
+        # Then
+        # 1. Standard header and content
+        assert f"## Standard {standard_id}" in prompt
+        assert mock_standard_content in prompt
+
+        # 2. Codebase content
+        assert mock_codebase_content in prompt
+
+        # 3. Instructions - more flexible matching
+        assert any(
+            instruction in prompt for instruction in COMPLIANCE_INSTRUCTIONS)
+        assert "Determine if the codebase" in prompt
+        assert "files/sections" in prompt
+
+        # 4. Report format - essential elements only
+        assert "compliance report" in prompt
+        assert "<span style=\"color:" in prompt
+        assert "Recommendations" in prompt
+
+        # 5. Color codes
+        assert compliance_colors["yes"] in prompt
+        assert compliance_colors["no"] in prompt
+        assert compliance_colors["partial"] in prompt
+
+    @pytest.mark.asyncio
+    async def test_handles_empty_standard_content(self):
+        """Test handling of empty standard content."""
+        # Given
+        standard = {"_id": "empty_standard", "text": ""}
+        codebase = "print('test')"
+
+        # When
+        prompt = await generate_user_prompt(standard, codebase)
+
+        # Then
+        assert "## Standard empty_standard" in prompt
+        assert any(
+            instruction in prompt for instruction in COMPLIANCE_INSTRUCTIONS)
+
+    @pytest.mark.parametrize("content_length", [100, 1000])
+    @pytest.mark.asyncio
+    async def test_handles_long_standard_content(self, content_length, mock_codebase_content):
+        """Test handling of standards with different lengths."""
+        # Given
+        long_content = "# " + "very long standard " * content_length
+        standard = {"_id": "long_standard", "text": long_content}
+
+        # When
+        prompt = await generate_user_prompt(standard, mock_codebase_content)
+
+        # Then
+        assert long_content in prompt
+        assert mock_codebase_content in prompt
+        assert any(
+            instruction in prompt for instruction in COMPLIANCE_INSTRUCTIONS)
+
+
+@pytest.mark.compliance_checking
+class TestComplianceChecking:
+    """Tests for compliance checking functionality."""
+
+    @pytest.mark.asyncio
+    async def test_handles_api_errors(
+        self,
+        mock_anthropic_error_client,
+        mock_db_client,
+        mock_file_operations
+    ):
+        """Test handling of API failures."""
+        # Given
+        codebase_file = Path("test_codebase.txt")
+        standards = [{"_id": "test_standard", "text": "Test standard content"}]
+
+        # When/Then
+        with patch('src.agents.code_reviews_agent.AsyncAnthropic', mock_anthropic_error_client), \
+                patch('builtins.open', create=True, new=mock_file_operations), \
+                patch('src.database.get_database', mock_db_client), \
+                patch.dict('os.environ', {'ANTHROPIC_API_KEY': TEST_API_KEY, 'LLM_TESTING': 'false'}):
+
+            with pytest.raises(AuthenticationError) as exc_info:
+                await check_compliance(
+                    codebase_file,
+                    standards,
+                    TEST_REVIEW_ID,
+                    TEST_STANDARD_SET,
+                    [TEST_MONGODB_ID]
+                )
+
+            assert "invalid x-api-key" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_raises_error_without_api_key(
+        self,
+        mock_db_client,
+        mock_file_operations
+    ):
+        """Test handling of missing API key."""
+        # Given
+        codebase_file = Path("test_codebase.txt")
+        standards = [{"_id": "test_standard", "text": "Test standard content"}]
+
+        # When/Then
+        with patch.dict('os.environ', {'LLM_TESTING': 'false'}, clear=True), \
+                patch('builtins.open', create=True, new=mock_file_operations), \
+                patch('src.database.get_database', mock_db_client):
+
+            with pytest.raises(ValueError) as exc_info:
+                await check_compliance(
+                    codebase_file,
+                    standards,
+                    TEST_REVIEW_ID,
+                    TEST_STANDARD_SET,
+                    [TEST_MONGODB_ID]
+                )
+
+            assert "ANTHROPIC_API_KEY" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_successful_compliance_check(
+        self,
+        mock_anthropic_success_client,
+        mock_db_client,
+        mock_file_operations
+    ):
+        """Test successful compliance check and report generation."""
+        # Given
+        codebase_file = Path("test_codebase.txt")
+        standards = [{"_id": "test_standard", "text": "Test standard content"}]
+
+        # When
+        with patch('src.agents.code_reviews_agent.AsyncAnthropic', mock_anthropic_success_client), \
+                patch('builtins.open', create=True, new=mock_file_operations), \
+                patch('src.database.get_database', mock_db_client), \
+                patch('asyncio.sleep', AsyncMock()), \
+                patch.dict('os.environ', {'ANTHROPIC_API_KEY': TEST_API_KEY, 'LLM_TESTING': 'false'}):
+
+            report_file = await check_compliance(
+                codebase_file,
+                standards,
+                TEST_REVIEW_ID,
+                TEST_STANDARD_SET,
+                [TEST_MONGODB_ID]
+            )
+
+            # Then
+            expected_path = codebase_file.parent / \
+                f"{TEST_REVIEW_ID}-{TEST_STANDARD_SET}.md"
+            assert report_file == expected_path
+            assert mock_file_operations.call_count == 2  # One read, one write
