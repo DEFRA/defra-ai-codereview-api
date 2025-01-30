@@ -72,24 +72,330 @@ interface CodeReview {
     _id: ObjectId;              // Unique identifier
     repository_url: string;     // Repository URL to analyze
     status: ReviewStatus;       // Current review status
+    standard_sets: StandardSetInfo[]; // Associated standard sets
+    compliance_reports: ComplianceReport[]; // Review results
     created_at: DateTime;       // Creation timestamp
     updated_at: DateTime;       // Last update timestamp
-    results: ReviewResult[];    // Analysis results
 }
 
 enum ReviewStatus {
-    STARTED = "started",
-    COMPLETED = "completed",
-    FAILED = "failed"
+    STARTED = "started",        // Review has been created
+    IN_PROGRESS = "in_progress",// Review is being processed
+    COMPLETED = "completed",    // Review has finished successfully
+    FAILED = "failed"          // Review encountered an error
 }
 
-interface ReviewResult {
-    file: string;              // File path
-    line: number;              // Line number
-    message: string;           // Review comment
-    severity: string;          // Issue severity
-    rule: string;             // Violated rule
+interface StandardSetInfo {
+    _id: ObjectId;             // Standard set identifier
+    name: string;              // Name of the standard set
 }
+
+interface ComplianceReport {
+    _id: ObjectId;             // Report identifier
+    standard_set_name: string; // Name of the standard set
+    file: string;             // File path being reviewed
+    report: string;           // Detailed compliance report
+}
+```
+
+### Custom Types
+
+#### PyObjectId
+A custom type for handling MongoDB ObjectIds that:
+- Validates 24-character hexadecimal strings
+- Handles both string and ObjectId inputs
+- Provides JSON schema validation
+- Ensures consistent serialization
+
+Example:
+```json
+{
+    "_id": "507f1f77bcf86cd799439011",
+    "repository_url": "https://github.com/org/repo",
+    "status": "in_progress",
+    "standard_sets": [
+        {
+            "_id": "507f1f77bcf86cd799439012",
+            "name": "Python Standards"
+        }
+    ],
+    "compliance_reports": [
+        {
+            "_id": "507f1f77bcf86cd799439013",
+            "standard_set_name": "Python Standards",
+            "file": "src/main.py",
+            "report": "Code follows PEP 8 guidelines..."
+        }
+    ],
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-01T00:00:00Z"
+}
+```
+
+## Database Schema
+
+### Collections Schema Validation
+
+#### Classifications Collection
+```typescript
+{
+    bsonType: "object",
+    required: ["name"],
+    properties: {
+        _id: {
+            bsonType: "objectId",
+            description: "Unique identifier"
+        },
+        name: {
+            bsonType: "string",
+            description: "Classification name"
+        }
+    }
+}
+```
+
+#### Standard Sets Collection
+```typescript
+{
+    bsonType: "object",
+    required: ["name", "repository_url"],
+    properties: {
+        _id: {
+            bsonType: "objectId",
+            description: "Unique identifier"
+        },
+        name: {
+            bsonType: "string",
+            description: "Standard set name"
+        },
+        repository_url: {
+            bsonType: "string",
+            description: "URL of the repository containing standards"
+        },
+        custom_prompt: {
+            bsonType: "string",
+            description: "Custom prompt for LLM processing"
+        },
+        created_at: {
+            bsonType: "date",
+            description: "Creation timestamp"
+        },
+        updated_at: {
+            bsonType: "date",
+            description: "Last update timestamp"
+        }
+    }
+}
+```
+
+#### Standards Collection
+```typescript
+{
+    bsonType: "object",
+    required: ["text", "repository_path", "standard_set_id", "classification_ids", "created_at", "updated_at"],
+    properties: {
+        _id: {
+            bsonType: "objectId",
+            description: "Unique identifier"
+        },
+        text: {
+            bsonType: "string",
+            description: "Standard text content"
+        },
+        repository_path: {
+            bsonType: "string",
+            description: "Path to the standard in the repository"
+        },
+        standard_set_id: {
+            bsonType: "objectId",
+            description: "Reference to the standard set"
+        },
+        classification_ids: {
+            bsonType: "array",
+            items: {
+                bsonType: "objectId",
+                description: "Reference to classifications"
+            },
+            description: "List of classification references"
+        },
+        created_at: {
+            bsonType: "date",
+            description: "Creation timestamp"
+        },
+        updated_at: {
+            bsonType: "date",
+            description: "Last update timestamp"
+        }
+    }
+}
+```
+
+#### Code Reviews Collection
+```typescript
+{
+    bsonType: "object",
+    required: ["repository_url", "status", "standard_sets", "created_at", "updated_at"],
+    properties: {
+        _id: {
+            bsonType: "objectId",
+            description: "Unique identifier"
+        },
+        repository_url: {
+            bsonType: "string",
+            description: "Repository URL to analyze"
+        },
+        status: {
+            enum: ["started", "in_progress", "completed", "failed"],
+            description: "Current review status"
+        },
+        standard_sets: {
+            bsonType: "array",
+            items: {
+                bsonType: "object",
+                required: ["_id", "name"],
+                properties: {
+                    _id: {
+                        bsonType: "objectId",
+                        description: "Standard set identifier"
+                    },
+                    name: {
+                        bsonType: "string",
+                        description: "Name of the standard set"
+                    }
+                }
+            }
+        },
+        compliance_reports: {
+            bsonType: "array",
+            items: {
+                bsonType: "object",
+                required: ["_id", "standard_set_name", "file", "report"],
+                properties: {
+                    _id: {
+                        bsonType: "objectId",
+                        description: "Report identifier"
+                    },
+                    standard_set_name: {
+                        bsonType: "string",
+                        description: "Name of the standard set"
+                    },
+                    file: {
+                        bsonType: "string",
+                        description: "File path being reviewed"
+                    },
+                    report: {
+                        bsonType: "string",
+                        description: "Detailed compliance report"
+                    }
+                }
+            }
+        },
+        created_at: {
+            bsonType: "date",
+            description: "Creation timestamp"
+        },
+        updated_at: {
+            bsonType: "date",
+            description: "Last update timestamp"
+        }
+    }
+}
+```
+
+### Collections Diagram
+```mermaid
+erDiagram
+    CodeReview {
+        ObjectId _id PK
+        string repository_url
+        string status
+        datetime created_at
+        datetime updated_at
+    }
+    StandardSet {
+        ObjectId _id PK
+        string name
+        string repository_url
+        string custom_prompt
+        datetime created_at
+        datetime updated_at
+    }
+    Standard {
+        ObjectId _id PK
+        string name
+        string description
+        string category
+        datetime created_at
+        datetime updated_at
+    }
+    Classification {
+        ObjectId _id PK
+        string name
+        datetime created_at
+        datetime updated_at
+    }
+    ComplianceReport {
+        ObjectId _id PK
+        string standard_set_name
+        string file
+        string report
+    }
+    StandardSetInfo {
+        ObjectId _id PK
+        string name
+    }
+
+    CodeReview ||--o{ ComplianceReport : contains
+    CodeReview ||--o{ StandardSetInfo : references
+    StandardSet ||--o{ Standard : contains
+    StandardSet ||--o{ Classification : applies_to
+```
+
+### Collection Details
+
+#### code_reviews
+Primary collection for storing code review requests and results.
+- Indexed Fields: `_id`, `repository_url`, `status`
+- Contains embedded documents: `compliance_reports`, `standard_sets`
+- Status enum: `started`, `in_progress`, `completed`, `failed`
+
+#### standard_sets
+Stores predefined sets of standards to check against.
+- Indexed Fields: `_id`, `name`
+- Contains custom prompts for AI processing
+- References standards and classifications
+
+#### standards
+Individual standards within standard sets.
+- Indexed Fields: `_id`, `name`, `category`
+- Linked to standard sets
+- Contains detailed standard descriptions
+
+#### classifications
+Technology/language classifications.
+- Indexed Fields: `_id`, `name`
+- Used to categorize standard sets
+- Examples: Python, Java, Node.js
+
+### Example Queries
+
+```javascript
+// Get all code reviews for a repository
+db.code_reviews.find({ 
+    repository_url: "https://github.com/org/repo" 
+})
+
+// Get completed reviews with compliance reports
+db.code_reviews.find({ 
+    status: "completed" 
+}, {
+    compliance_reports: 1
+})
+
+// Get standard sets by classification
+db.standard_sets.find({
+    "classifications.name": "Python"
+})
 ```
 
 ## API Endpoints

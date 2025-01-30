@@ -13,20 +13,19 @@ kanban-plugin: board
 
 ## To Do
 
+
 - [ ] Get running on CDP dev w/ bedrock
-- [ ] refactor dependency.py injection file for the existing code review?
-- [ ] pull out the anthropic model into the .env file
-- [ ] Extensive testing on endpoints to ensure they are consistent
+- [ ] add local LLM ollama dev for backend
 - [ ] verify - logging_config - only write to logfile when running locally, not in aws envs
-- [ ] refactor async def check_compliance() as its HUGE
 - [ ] Hooks: Linting, formatting, commit hooks for python api backend
 		- pylint --rcfile=/path/to/.pylintrc src tests
-- [ ] Check out the errors.py file and how error type handling works
 - [ ] pip freeze, python lib mgmt - add to .cursorrules?
 
 
 ## Doing
 
+- [ ] refactor - see snag list canvas
+- [ ] improve testing and refactoring prompts
 
 
 ## Done
@@ -46,6 +45,9 @@ kanban-plugin: board
 	
 	Add tests and test coverage
 - [ ] Update cursor rules to tell it to always ensure it using the latest versions of libraries in the requirements.txt
+- [x] merge 5.5 branch into standards ingest
+- [x] review .cursorrules
+- [x] Update Docs in code checker tool
 
 
 

@@ -57,21 +57,39 @@ class PyObjectId(str):
 class CodeReviewCreate(BaseModel):
     """Input model for creating a code review."""
     repository_url: str
-    standard_sets: list[str] = Field(description="List of standard set IDs to check against")
+    standard_sets: list[PyObjectId] = Field(description="List of standard set IDs to check against")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_encoders={ObjectId: str},
+        arbitrary_types_allowed=True
+    )
 
 
 class ComplianceReport(BaseModel):
     """Model for individual compliance reports."""
-    id: str
+    id: PyObjectId = Field(default_factory=PyObjectId, alias='_id')
     standard_set_name: str
     file: str
     report: str
 
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_encoders={ObjectId: str},
+        arbitrary_types_allowed=True
+    )
+
 
 class StandardSetInfo(BaseModel):
     """Standard set information."""
-    id: str
+    id: PyObjectId = Field(default_factory=PyObjectId, alias='_id')
     name: str
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_encoders={ObjectId: str},
+        arbitrary_types_allowed=True
+    )
 
 
 class CodeReview(BaseModel):

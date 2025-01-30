@@ -24,58 +24,42 @@ class StandardSetRepository:
     async def create(self, standard_set: StandardSetCreate) -> StandardSet:
         """Create or update a standard set."""
         try:
-            # Try non-transactional operation first for test environments
-            try:
-                result = await self._create_with_session(standard_set)
+            # First check if a standard set with this name exists
+            existing = await self.collection.find_one({"name": standard_set.name})
+            
+            # If exists, delete associated standards first
+            if existing:
+                await self.standards_collection.delete_many(
+                    {"standard_set_id": str(existing["_id"])}
+                )
+            
+            # Prepare new document
+            now = datetime.now(timezone.utc)
+            doc = standard_set.model_dump()
+            doc.update({
+                "_id": ObjectId(),
+                "created_at": now,
+                "updated_at": now
+            })
+            
+            # Replace/insert the standard set
+            result = await self.collection.find_one_and_replace(
+                {"name": standard_set.name},
+                doc,
+                return_document=ReturnDocument.AFTER,
+                upsert=True
+            )
+            
+            if result:
+                result["_id"] = str(result["_id"])
                 return StandardSet(**result)
-            except Exception as e:
-                # Only try with transaction if first attempt failed and it's not a Mongomock error
-                if "Mongomock does not support sessions" not in str(e):
-                    async with await self.collection.database.client.start_session() as session:
-                        async with session.start_transaction():
-                            result = await self._create_with_session(standard_set, session)
-                            return StandardSet(**result)
-                return StandardSet(**(await self._create_with_session(standard_set)))
+            
+            doc["_id"] = str(doc["_id"])
+            return StandardSet(**doc)
                 
         except Exception as e:
             logger.error(f"Error creating standard set: {str(e)}")
             raise RepositoryError(f"Failed to create standard set: {str(e)}")
-
-    async def _create_with_session(self, standard_set: StandardSetCreate, session=None):
-        """Internal method to handle creation with optional session."""
-        # First check if a standard set with this name exists
-        existing = await self.collection.find_one({"name": standard_set.name}, session=session)
-        
-        now = datetime.now(timezone.utc)
-        doc = standard_set.model_dump()
-        doc.update({
-            "_id": ObjectId(),
-            "created_at": now,
-            "updated_at": now
-        })
-
-        # If exists, delete associated standards first
-        if existing:
-            await self.standards_collection.delete_many(
-                {"standard_set_id": str(existing["_id"])},
-                session=session
-            )
-        
-        # Replace/insert the standard set
-        result = await self.collection.find_one_and_replace(
-            {"name": standard_set.name},
-            doc,
-            return_document=ReturnDocument.AFTER,
-            upsert=True,
-            session=session
-        )
-        
-        if result:
-            result["_id"] = str(result["_id"])
-            return result
-        
-        doc["_id"] = str(doc["_id"])
-        return doc
 
     async def get_all(self):
         """Get all standard sets."""
@@ -137,8 +121,14 @@ class StandardSetRepository:
             
             # Get associated standards
             standards = await self.standards_collection.find(
-                {"standard_set_id": str(standard_set["_id"])}
+                {"standard_set_id": id}
             ).to_list(None)
+            
+            # Convert ObjectIds to strings in standards
+            for standard in standards:
+                standard["_id"] = str(standard["_id"])
+                if "classification_ids" in standard:
+                    standard["classification_ids"] = [str(id) for id in standard["classification_ids"]]
             
             # Convert ObjectId to string
             standard_set["_id"] = str(standard_set["_id"])

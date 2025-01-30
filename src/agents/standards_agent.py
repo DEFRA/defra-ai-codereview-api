@@ -79,11 +79,14 @@ async def process_standards(
     # Get standards collection
     standards_collection = db.get_collection("standards")
     
+    # Convert standard_set_id to ObjectId
+    standard_set_oid = ObjectId(standard_set_id)
+    
     # Delete any existing standards for this set
-    result = await standards_collection.delete_many({"standard_set_id": standard_set_id})
+    result = await standards_collection.delete_many({"standard_set_id": standard_set_oid})
     
     # Create name to ID mapping for classifications
-    classification_map = {c.name: str(c.id) for c in classifications}
+    classification_map = {c.name: c.id for c in classifications}
     
     # If LLM testing is enabled, only process specified test files
     if settings.LLM_TESTING:
@@ -128,9 +131,9 @@ async def process_standards(
             )
             logger.debug(f"Classifications for {file_path}: {standard_classifications}")
             
-            # Convert classification names to IDs
+            # Convert classification names to IDs and ensure they are ObjectIds
             classification_ids = [
-                ObjectId(classification_map[name])
+                ObjectId(str(classification_map[name]))
                 for name in standard_classifications
                 if name in classification_map
             ]
@@ -140,7 +143,7 @@ async def process_standards(
                 "_id": ObjectId(),
                 "text": content,
                 "repository_path": str(file_path.relative_to(repo_path)),
-                "standard_set_id": standard_set_id,
+                "standard_set_id": standard_set_oid,
                 "classification_ids": classification_ids,
                 "created_at": datetime.now(UTC),
                 "updated_at": datetime.now(UTC)
