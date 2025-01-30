@@ -6,6 +6,7 @@ from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
 from src.config.config import settings
 from src.repositories.classification_repo import ClassificationRepository
 from src.repositories.standard_set_repo import StandardSetRepository
+from src.repositories.code_review_repo import CodeReviewRepository
 from src.database.database_utils import get_database
 
 async def get_classifications_collection() -> AsyncGenerator[AsyncIOMotorCollection, None]:
@@ -34,4 +35,18 @@ async def get_standard_set_repo(
     collection: AsyncIOMotorCollection = Depends(get_standard_sets_collection)
 ) -> StandardSetRepository:
     """Get standard set repository instance."""
-    return StandardSetRepository(collection) 
+    return StandardSetRepository(collection)
+
+async def get_code_reviews_collection() -> AsyncGenerator[AsyncIOMotorCollection, None]:
+    """Get code reviews collection."""
+    client = AsyncIOMotorClient(settings.MONGO_URI)
+    try:
+        yield client[settings.MONGO_INITDB_DATABASE].code_reviews
+    finally:
+        client.close()
+
+async def get_code_review_repo(
+    collection: AsyncIOMotorCollection = Depends(get_code_reviews_collection)
+) -> CodeReviewRepository:
+    """Get code review repository instance."""
+    return CodeReviewRepository(collection) 
