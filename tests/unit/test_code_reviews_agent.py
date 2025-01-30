@@ -166,7 +166,23 @@ class TestPromptGeneration:
         compliance_colors,
         standard_id
     ):
-        """Test that generate_user_prompt includes all required components."""
+        """Test that generate_user_prompt includes all required components and follows expected format.
+
+        Expected prompt format:
+        ```
+        Given the standard below:
+        ## Standard {standard_id}
+        {standard_content}
+
+        Compare the entire codebase of the submitted repository below...
+        {codebase_content}
+
+        Generate a informative but concise compliance report using this format:
+
+        ## Standard: [Standard Title]
+        Compliant: <span style="color: [COLOUR]">**[Yes/No/Partially]**</span>
+        ```
+        """
         # Given
         standard = {"_id": standard_id, "text": mock_standard_content}
 
@@ -174,28 +190,50 @@ class TestPromptGeneration:
         prompt = await generate_user_prompt(standard, mock_codebase_content)
 
         # Then
-        # 1. Standard header and content
+        # 1. Standard header and content validation
+        assert "Given the standard below:" in prompt
         assert f"## Standard {standard_id}" in prompt
         assert mock_standard_content in prompt
+        assert prompt.index("Given the standard below:") < prompt.index(
+            f"## Standard {standard_id}")
+        assert prompt.index(f"## Standard {standard_id}") < prompt.index(
+            mock_standard_content)
 
-        # 2. Codebase content
+        # 2. Codebase content validation
+        assert "Compare the entire codebase" in prompt
         assert mock_codebase_content in prompt
+        assert prompt.index("Compare the entire codebase") < prompt.index(
+            mock_codebase_content)
 
-        # 3. Instructions - more flexible matching
-        assert any(
-            instruction in prompt for instruction in COMPLIANCE_INSTRUCTIONS)
+        # 3. Instructions validation with specific format checks
         assert "Determine if the codebase" in prompt
         assert "files/sections" in prompt
+        assert "If non-compliant, provide concise recommendations" in prompt
+        assert "Consider dependencies and interactions" in prompt
 
-        # 4. Report format - essential elements only
-        assert "compliance report" in prompt
-        assert "<span style=\"color:" in prompt
-        assert "Recommendations" in prompt
+        # 4. Report format validation with specific structure checks
+        assert "Generate a informative but concise compliance report" in prompt
+        assert "<span style=\"color: [COLOUR]" in prompt
+        assert "Compliant:" in prompt
+        assert "Relevant Files/Sections:" in prompt
+        assert "Specific Recommendations" in prompt
 
-        # 5. Color codes
-        assert compliance_colors["yes"] in prompt
-        assert compliance_colors["no"] in prompt
-        assert compliance_colors["partial"] in prompt
+        # 5. Color codes validation with specific format
+        for status, color in compliance_colors.items():
+            assert color in prompt
+            assert color.startswith("#") and len(
+                color) == 7  # Valid hex color format
+
+        # 6. Section ordering validation
+        sections = [
+            "Given the standard below:",
+            "## Standard",
+            "Compare the entire codebase",
+            "Generate a informative but concise compliance report"
+        ]
+        section_positions = [prompt.index(section) for section in sections]
+        # Ensure correct section ordering
+        assert section_positions == sorted(section_positions)
 
     @pytest.mark.asyncio
     async def test_handles_empty_standard_content(self):
@@ -249,7 +287,7 @@ class TestComplianceChecking:
         # When/Then
         with patch('src.agents.code_reviews_agent.AsyncAnthropic', mock_anthropic_error_client), \
                 patch('builtins.open', create=True, new=mock_file_operations), \
-                patch('src.database.get_database', mock_db_client), \
+                patch('src.database.database_utils.get_database', mock_db_client), \
                 patch.dict('os.environ', {'ANTHROPIC_API_KEY': TEST_API_KEY, 'LLM_TESTING': 'false'}):
 
             with pytest.raises(AuthenticationError) as exc_info:
@@ -277,7 +315,7 @@ class TestComplianceChecking:
         # When/Then
         with patch.dict('os.environ', {'LLM_TESTING': 'false'}, clear=True), \
                 patch('builtins.open', create=True, new=mock_file_operations), \
-                patch('src.database.get_database', mock_db_client):
+                patch('src.database.database_utils.get_database', mock_db_client):
 
             with pytest.raises(ValueError) as exc_info:
                 await check_compliance(
@@ -305,7 +343,7 @@ class TestComplianceChecking:
         # When
         with patch('src.agents.code_reviews_agent.AsyncAnthropic', mock_anthropic_success_client), \
                 patch('builtins.open', create=True, new=mock_file_operations), \
-                patch('src.database.get_database', mock_db_client), \
+                patch('src.database.database_utils.get_database', mock_db_client), \
                 patch('asyncio.sleep', AsyncMock()), \
                 patch.dict('os.environ', {'ANTHROPIC_API_KEY': TEST_API_KEY, 'LLM_TESTING': 'false'}):
 
