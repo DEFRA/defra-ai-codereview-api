@@ -1,14 +1,12 @@
-"""MongoDB database connection and initialization."""
-from motor.motor_asyncio import AsyncIOMotorClient
+"""Database utilities."""
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from src.config.config import settings
-from src.database.database_init import init_database
+from . import db
+from .database_init import init_database
 
-# Initialize database with schema validation
-client = AsyncIOMotorClient(settings.MONGO_URI)
-db = None
 
-async def get_database():
-    """Get database connection with schema validation."""
+async def get_database() -> AsyncIOMotorDatabase:
+    """Get database instance."""
     global db
     if db is None:
         db = await init_database()

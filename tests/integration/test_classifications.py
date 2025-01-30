@@ -24,7 +24,7 @@ async def test_create_classification_succeeds_with_valid_input(
 ) -> None:
     """
     Test successful creation of a classification.
-    
+
     Given: A valid classification data
     When: Creating a new classification
     Then: Response should be 201 with correct classification data
@@ -35,7 +35,8 @@ async def test_create_classification_succeeds_with_valid_input(
     }
 
     # When
-    response = test_client.post("/api/v1/classifications", json=test_classification)
+    response = test_client.post(
+        "/api/v1/classifications", json=test_classification)
 
     # Then
     assert response.status_code == 201
@@ -50,7 +51,7 @@ def test_create_classification_fails_with_missing_required_fields(
 ) -> None:
     """
     Test validation of required fields.
-    
+
     Given: A request body missing required fields
     When: Creating a new classification
     Then: Response should be 422 with validation error details
@@ -61,7 +62,8 @@ def test_create_classification_fails_with_missing_required_fields(
     }
 
     # When
-    response = test_client.post("/api/v1/classifications", json=test_classification)
+    response = test_client.post(
+        "/api/v1/classifications", json=test_classification)
 
     # Then
     assert response.status_code == 422
@@ -76,7 +78,7 @@ async def test_list_classifications_returns_all_items(
 ) -> None:
     """
     Test listing all classifications.
-    
+
     Given: Multiple classifications in the database
     When: Requesting all classifications
     Then: Response should include all classifications
@@ -84,7 +86,7 @@ async def test_list_classifications_returns_all_items(
     # Given
     # Clear existing data
     await mock_mongodb.classifications.delete_many({})
-    
+
     test_classifications = [
         {
             "_id": ObjectId(),
@@ -99,7 +101,7 @@ async def test_list_classifications_returns_all_items(
             "updated_at": datetime.now(timezone.utc)
         }
     ]
-    
+
     for classification in test_classifications:
         await mock_mongodb.classifications.insert_one(classification)
 
@@ -120,7 +122,7 @@ async def test_delete_classification_succeeds_with_valid_id(
 ) -> None:
     """
     Test successful deletion of a classification.
-    
+
     Given: A valid classification ID
     When: Deleting the classification
     Then: Response should confirm deletion
@@ -128,7 +130,7 @@ async def test_delete_classification_succeeds_with_valid_id(
     # Given
     # Clear existing data
     await mock_mongodb.classifications.delete_many({})
-    
+
     test_classification = {
         "_id": ObjectId(),
         "name": "Test",
@@ -139,13 +141,14 @@ async def test_delete_classification_succeeds_with_valid_id(
     classification_id = str(test_classification["_id"])
 
     # When
-    response = test_client.delete(f"/api/v1/classifications/{classification_id}")
+    response = test_client.delete(
+        f"/api/v1/classifications/{classification_id}")
 
     # Then
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "success"
-    
+
     # Verify deletion
     remaining = await mock_mongodb.classifications.find_one({"_id": ObjectId(classification_id)})
     assert remaining is None
@@ -158,7 +161,7 @@ async def test_delete_classification_fails_with_invalid_id(
 ) -> None:
     """
     Test deletion with invalid ID.
-    
+
     Given: An invalid classification ID
     When: Attempting to delete the classification
     Then: Response should be 400 with error message
@@ -182,15 +185,15 @@ async def test_delete_classification_fails_with_nonexistent_id(
 ) -> None:
     """
     Test deletion with nonexistent ID.
-    
+
     Given: A valid but nonexistent classification ID
     When: Attempting to delete the classification
-    Then: Response should be 200 as the API treats this as a successful deletion
+    Then: Response should be 200 with success status
     """
     # Given
     # Clear existing data
     await mock_mongodb.classifications.delete_many({})
-    
+
     nonexistent_id = str(ObjectId())
 
     # When
@@ -201,6 +204,10 @@ async def test_delete_classification_fails_with_nonexistent_id(
     data = response.json()
     assert data["status"] == "success"
 
+    # Verify database state
+    count = await mock_mongodb.classifications.count_documents({})
+    assert count == 0
+
 
 @pytest.mark.asyncio
 async def test_create_classification_handles_database_error(
@@ -209,7 +216,7 @@ async def test_create_classification_handles_database_error(
 ) -> None:
     """
     Test error handling when database operation fails during creation.
-    
+
     Given: A database that raises an error during insert
     When: Creating a new classification
     Then: Should return 400 with error message
@@ -218,12 +225,13 @@ async def test_create_classification_handles_database_error(
     test_classification = {
         "name": "Security"
     }
-    
+
     # When
     with patch('src.repositories.classification_repo.ClassificationRepository.create') as mock_create:
         mock_create.side_effect = Exception("Database error")
-        response = test_client.post("/api/v1/classifications", json=test_classification)
-    
+        response = test_client.post(
+            "/api/v1/classifications", json=test_classification)
+
     # Then
     assert response.status_code == 400
     data = response.json()
@@ -237,7 +245,7 @@ async def test_list_classifications_handles_database_error(
 ) -> None:
     """
     Test error handling when database operation fails during listing.
-    
+
     Given: A database that raises an error during find operation
     When: Requesting all classifications
     Then: Should return 500 with error message
@@ -246,7 +254,7 @@ async def test_list_classifications_handles_database_error(
     with patch('src.repositories.classification_repo.ClassificationRepository.get_all') as mock_get_all:
         mock_get_all.side_effect = Exception("Database error")
         response = test_client.get("/api/v1/classifications")
-    
+
     # Then
     assert response.status_code == 500
     data = response.json()
@@ -260,19 +268,19 @@ async def test_delete_classification_handles_database_error(
 ) -> None:
     """
     Test error handling when database operation fails during deletion.
-    
+
     Given: A database that raises an error during delete operation
     When: Deleting a classification
     Then: Should return 500 with error message
     """
     # Given
     test_id = str(ObjectId())
-    
+
     # When
     with patch('src.repositories.classification_repo.ClassificationRepository.delete') as mock_delete:
         mock_delete.side_effect = Exception("Database error")
         response = test_client.delete(f"/api/v1/classifications/{test_id}")
-    
+
     # Then
     assert response.status_code == 500
     data = response.json()
@@ -286,20 +294,21 @@ async def test_delete_classification_reraises_http_exception(
 ) -> None:
     """
     Test that HTTPExceptions are converted to 500 errors.
-    
+
     Given: A repository that raises an HTTPException
     When: Deleting a classification
     Then: Should return a 500 error
     """
     # Given
     test_id = str(ObjectId())
-    http_error = HTTPException(status_code=status.HTTP_418_IM_A_TEAPOT, detail="Test HTTP error")
-    
+    http_error = HTTPException(
+        status_code=status.HTTP_418_IM_A_TEAPOT, detail="Test HTTP error")
+
     # When
     with patch('src.repositories.classification_repo.ClassificationRepository.delete') as mock_delete:
         mock_delete.side_effect = http_error
         response = test_client.delete(f"/api/v1/classifications/{test_id}")
-    
+
     # Then
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
     data = response.json()
@@ -323,7 +332,8 @@ async def test_delete_classification_handles_connection_error(
 
     # When
     with patch('src.repositories.classification_repo.ClassificationRepository.delete') as mock_delete:
-        mock_delete.side_effect = ConnectionError("Failed to connect to database")
+        mock_delete.side_effect = ConnectionError(
+            "Failed to connect to database")
         response = test_client.delete(f"/api/v1/classifications/{test_id}")
 
     # Then
@@ -339,7 +349,7 @@ async def test_create_classification_fails_with_duplicate_name(
 ) -> None:
     """
     Test duplicate classification name validation.
-    
+
     Given: An existing classification
     When: Creating a new classification with the same name
     Then: Response should be 400 with appropriate error message
@@ -348,17 +358,20 @@ async def test_create_classification_fails_with_duplicate_name(
     test_classification = {
         "name": "Python"
     }
-    
+
     # Create first classification
-    response = test_client.post("/api/v1/classifications", json=test_classification)
+    response = test_client.post(
+        "/api/v1/classifications", json=test_classification)
     assert response.status_code == 201
 
     # When - Try to create duplicate
     with patch.object(ClassificationRepository, 'create') as mock_create:
-        mock_create.side_effect = ValueError("Classification with name 'Python' already exists")
-        response = test_client.post("/api/v1/classifications", json=test_classification)
+        mock_create.side_effect = ValueError(
+            "Classification with name 'Python' already exists")
+        response = test_client.post(
+            "/api/v1/classifications", json=test_classification)
 
         # Then
         assert response.status_code == 400
         data = response.json()
-        assert "already exists" in data["detail"] 
+        assert "already exists" in data["detail"]

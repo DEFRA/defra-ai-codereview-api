@@ -8,7 +8,7 @@ from mongomock_motor import AsyncMongoMockClient
 from fastapi.testclient import TestClient
 from fastapi import FastAPI
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, AsyncMock
 from typing import AsyncGenerator, Generator
 import asyncio
 from dotenv import load_dotenv
@@ -44,8 +44,16 @@ async def mock_mongodb() -> AsyncGenerator[AsyncMongoMockClient, None]:
     app.dependency_overrides[get_repository] = lambda: ClassificationRepository(
         mock_db.classifications)
 
-    # Also patch the global database connection
-    with patch('src.database.db', mock_db):
+    # Initialize collections with schema validation
+    await mock_db.create_collection("classifications")
+    await mock_db.create_collection("standard_sets")
+    await mock_db.create_collection("standards")
+    await mock_db.create_collection("code_reviews")
+
+    # Patch all database operations
+    with patch('src.database.database_init.init_database', AsyncMock(return_value=mock_db)), \
+            patch('src.database.database_utils.init_database', AsyncMock(return_value=mock_db)), \
+            patch('motor.motor_asyncio.AsyncIOMotorClient', return_value=mock_client):
         yield mock_db
 
     # Clean up
