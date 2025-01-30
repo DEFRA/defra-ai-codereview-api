@@ -5,6 +5,7 @@ from src.models.code_review import CodeReview, CodeReviewCreate, CodeReviewList
 from src.utils.logging_utils import setup_logger
 from src.services.code_review_service import CodeReviewService
 from src.api.dependencies import get_code_review_service
+from src.utils.id_validation import ensure_object_id
 
 logger = setup_logger(__name__)
 router = APIRouter()
@@ -63,6 +64,12 @@ async def get_code_review(
 ):
     """Get a specific code review."""
     try:
+        if not ensure_object_id(_id):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid review ID format"
+            )
+            
         review = await service.get_review_by_id(_id)
         if review is None:
             raise HTTPException(
@@ -70,11 +77,6 @@ async def get_code_review(
                 detail=f"Code review {_id} not found"
             )
         return review
-    except ValueError as e:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid review ID format: {str(e)}"
-        )
     except HTTPException:
         raise
     except Exception as e:

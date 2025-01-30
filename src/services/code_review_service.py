@@ -45,14 +45,19 @@ def _run_in_process(review_id: str, repository_url: str, standard_sets: list[str
             for standard_set_id in standard_sets:
                 try:
                     # Get standard set from database
-                    standard_set = await db.standard_sets.find_one({"_id": ensure_object_id(standard_set_id)})
+                    object_id = ensure_object_id(standard_set_id)
+                    if not object_id:
+                        logger.error(f"Invalid standard set ID format: {standard_set_id}")
+                        continue
+                        
+                    standard_set = await db.standard_sets.find_one({"_id": object_id})
                     if not standard_set:
                         logger.error(f"Standard set {standard_set_id} not found")
                         continue
 
                     # Query for matching standards
                     query = {
-                        "standard_set_id": ensure_object_id(standard_set_id),
+                        "standard_set_id": object_id,
                         "$or": [
                             *[{"classification_ids": obj_id} for obj_id in matching_classification_ids],
                             {"$or": [
@@ -62,7 +67,7 @@ def _run_in_process(review_id: str, repository_url: str, standard_sets: list[str
                             ]}
                         ]
                     }
-                    
+
                     standards = await db.standards.find(query).to_list(None)
                     if not standards:
                         logger.warning(f"No matching standards found for standard set {standard_set_id}")
