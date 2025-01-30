@@ -8,6 +8,7 @@ from src.repositories.classification_repo import ClassificationRepository
 from src.repositories.standard_set_repo import StandardSetRepository
 from src.repositories.code_review_repo import CodeReviewRepository
 from src.services.code_review_service import CodeReviewService
+from src.services.classification_service import ClassificationService
 from src.database.database_utils import get_database
 
 async def get_classifications_collection() -> AsyncGenerator[AsyncIOMotorCollection, None]:
@@ -57,4 +58,11 @@ async def get_code_review_service(
     repo: CodeReviewRepository = Depends(get_code_review_repo)
 ) -> CodeReviewService:
     """Get code review service instance."""
-    return CodeReviewService(db, repo) 
+    return CodeReviewService(db, repo)
+
+async def get_classification_service(
+    db: AsyncIOMotorDatabase = Depends(get_database),
+    repo: ClassificationRepository = Depends(get_repository)
+) -> ClassificationService:
+    """Get classification service instance."""
+    return ClassificationService(db, repo) 

@@ -1,23 +1,13 @@
 """Classification API endpoints."""
 from fastapi import APIRouter, HTTPException, Depends, status
-from motor.motor_asyncio import AsyncIOMotorCollection
 from typing import List
-from bson.errors import InvalidId
-from bson import ObjectId
 from src.models.classification import Classification, ClassificationCreate
-from src.repositories.classification_repo import ClassificationRepository
-from src.api.dependencies import get_classifications_collection
+from src.services.classification_service import ClassificationService
+from src.api.dependencies import get_classification_service
 from src.utils.logging_utils import setup_logger
 
 logger = setup_logger(__name__)
-
 router = APIRouter()
-
-async def get_repository(
-    collection: AsyncIOMotorCollection = Depends(get_classifications_collection)
-) -> ClassificationRepository:
-    """Get classification repository instance."""
-    return ClassificationRepository(collection)
 
 @router.post("/classifications", 
          response_model=Classification,
@@ -29,11 +19,11 @@ async def get_repository(
          })
 async def create_classification(
     classification: ClassificationCreate,
-    repo: ClassificationRepository = Depends(get_repository)
+    service: ClassificationService = Depends(get_classification_service)
 ):
     """Create a new classification."""
     try:
-        return await repo.create(classification)
+        return await service.create_classification(classification)
     except Exception as e:
         logger.error(f"Error creating classification: {str(e)}")
         raise HTTPException(
@@ -48,11 +38,11 @@ async def create_classification(
             200: {"description": "List of all classifications"}
         })
 async def list_classifications(
-    repo: ClassificationRepository = Depends(get_repository)
+    service: ClassificationService = Depends(get_classification_service)
 ):
     """Get all classifications."""
     try:
-        return await repo.get_all()
+        return await service.get_all_classifications()
     except Exception as e:
         logger.error(f"Error listing classifications: {str(e)}")
         raise HTTPException(
@@ -68,12 +58,17 @@ async def list_classifications(
            })
 async def delete_classification(
     id: str,
-    repo: ClassificationRepository = Depends(get_repository)
+    service: ClassificationService = Depends(get_classification_service)
 ):
     """Delete a classification."""
     try:
-        await repo.delete(id)
-        return {"status": "success"}
+        success = await service.delete_classification(id)
+        if success:
+            return {"status": "success"}
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Classification not found"
+        )
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
