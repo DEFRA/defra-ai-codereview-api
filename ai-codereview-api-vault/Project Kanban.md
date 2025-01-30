@@ -12,23 +12,19 @@ kanban-plugin: board
 
 ## To Do
 
-- [ ] clean up branch - update docs (adams prompt), fix tests, new database backup
 - [ ] Investigate and fix the rate limit issue - bedrock?
 - [ ] Get running on CDP dev w/ bedrock
 - [ ] add local LLM ollama dev for backend
-- [ ] refactor dependency.py injection file for the existing code review?
-- [ ] pull out the anthropic model into the .env file
-- [ ] Extensive testing on endpoints to ensure they are consistent
 - [ ] verify - logging_config - only write to logfile when running locally, not in aws envs
-- [ ] refactor async def check_compliance() as its HUGE
 - [ ] Hooks: Linting, formatting, commit hooks for python api backend
 		- pylint --rcfile=/path/to/.pylintrc src tests
-- [ ] Check out the errors.py file and how error type handling works
 - [ ] pip freeze, python lib mgmt - add to .cursorrules?
 
 
 ## Doing
 
+- [ ] refactor - see snag list canvas
+- [ ] improve testing and refactoring prompts
 
 
 ## Done
