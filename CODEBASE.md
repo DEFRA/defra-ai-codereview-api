@@ -101,6 +101,12 @@ test_data/         # Local test data files
 - **Coverage**: CRUD operations, validation
 - **Mocks**: MongoDB
 
+#### test_code_review_functions.py
+- **Category**: API Test
+- **Tests**: Code review functions
+- **Coverage**: Functionality and error handling
+- **Mocks**: None
+
 ### Unit Tests
 - Tests for individual components and utilities
 - Focus on isolated functionality
