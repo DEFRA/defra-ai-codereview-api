@@ -20,6 +20,15 @@ Every time you choose to apply a rule(s), explicitly state the rule(s) in the ou
 - Docstring: Google style
 
 ## Code Organization
+src/api/v1/ - routing and http endpoints
+src/services/ - business logic
+src/repositories/ - data access
+src/agents/ - ai agents
+src/utils/ - utility functions
+src/config/ - configuration
+src/database/ - database operations
+src/models/ - data models
+
 ### Structure
 - Descriptive names
 - Module headers
