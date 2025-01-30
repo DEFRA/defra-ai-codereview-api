@@ -6,13 +6,14 @@ kanban-plugin: board
 
 ## Backlog
 
+- [ ] add local LLM ollama dev for backend
 - [ ] Spike - "Graph RAG" for large codebases?
 	- is there a way we can save tokens
 
 
 ## To Do
 
-- [ ] Investigate and fix the rate limit issue - bedrock?
+
 - [ ] Get running on CDP dev w/ bedrock
 - [ ] add local LLM ollama dev for backend
 - [ ] verify - logging_config - only write to logfile when running locally, not in aws envs
@@ -30,6 +31,9 @@ kanban-plugin: board
 ## Done
 
 **Complete**
+- [x] Update Docs in code checker tool
+- [x] review .cursorrules
+- [x] merge 5.5 branch into standards ingest
 - [x] max tokens limit in llm call?
 - [x] [[standards-ingest-prd]]
 - [ ] fix async issue
