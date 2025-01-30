@@ -8,12 +8,12 @@ This module tests the core functionality for:
 import pytest
 from unittest.mock import patch, AsyncMock, MagicMock
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
-from src.dependencies import (
+from src.api.dependencies import (
+    get_database,
     get_classifications_collection,
-    get_repository,
-    get_database
+    get_standard_sets_collection,
 )
-from src.config import settings
+from src.config.config import settings
 from src.repositories.classification_repo import ClassificationRepository
 
 @pytest.mark.asyncio

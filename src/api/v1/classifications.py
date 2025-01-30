@@ -6,8 +6,8 @@ from bson.errors import InvalidId
 from bson import ObjectId
 from src.models.classification import Classification, ClassificationCreate
 from src.repositories.classification_repo import ClassificationRepository
-from src.dependencies import get_classifications_collection
-from src.logging_config import setup_logger
+from src.api.dependencies import get_classifications_collection
+from src.utils.logging_utils import setup_logger
 
 logger = setup_logger(__name__)
 

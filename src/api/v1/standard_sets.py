@@ -4,12 +4,12 @@ from fastapi import APIRouter, HTTPException, Depends, status
 from motor.motor_asyncio import AsyncIOMotorDatabase, AsyncIOMotorCollection
 from src.models.standard_set import StandardSet, StandardSetCreate, StandardSetWithStandards
 from src.repositories.standard_set_repo import StandardSetRepository
-from src.dependencies import (
+from src.api.dependencies import (
     get_database,
     get_standard_sets_collection,
-    get_standard_set_repo
+    get_standard_set_repo,
 )
-from src.logging_config import setup_logger
+from src.utils.logging_utils import setup_logger
 from src.repositories.errors import DatabaseError, RepositoryError
 from bson import ObjectId
 from bson.errors import InvalidId

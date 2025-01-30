@@ -6,10 +6,10 @@ from typing import List
 from datetime import datetime
 from bson import ObjectId
 from fastapi import APIRouter, HTTPException
-from src.database import get_database
+from src.database.database_utils import get_database
 from src.models.code_review import CodeReview, CodeReviewCreate, ReviewStatus, CodeReviewList, PyObjectId
 from src.models.classification import Classification
-from src.logging_config import setup_logger
+from src.utils.logging_utils import setup_logger
 from src.agents.git_repos_agent import process_repositories
 from src.agents.code_reviews_agent import check_compliance
 from src.agents.standards_classification_agent import analyze_codebase_classifications

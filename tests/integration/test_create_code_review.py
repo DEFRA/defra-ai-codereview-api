@@ -17,7 +17,7 @@ import asyncio
 from unittest.mock import MagicMock
 from unittest.mock import AsyncMock
 from src.api.v1.code_reviews import process_code_review, run_agent_process
-from src.dependencies import get_database
+from src.api.dependencies import get_database
 
 
 @pytest.mark.asyncio

@@ -1,7 +1,8 @@
-"""MongoDB database initialization and schema validation."""
+"""Database initialization module."""
+import logging
 from datetime import datetime, UTC
 from motor.motor_asyncio import AsyncIOMotorClient
-from src.config import settings
+from src.config.config import settings
 from src.models.code_review import ReviewStatus
 
 # MongoDB validation schemas

@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from mongomock_motor import AsyncMongoMockClient
 from bson import ObjectId
 from src.repositories.standard_set_repo import StandardSetRepository
-from src.dependencies import get_database, get_standard_set_repo, get_standard_sets_collection
+from src.api.dependencies import get_database, get_standard_set_repo, get_standard_sets_collection
 from src.repositories.errors import DatabaseError, RepositoryError
 from src.api.v1.standard_sets import run_agent_process_sync
 from src.agents.standards_agent import process_standard_set

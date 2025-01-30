@@ -23,9 +23,9 @@ from fastapi.testclient import TestClient
 from mongomock_motor import AsyncMongoMockClient
 
 from src.main import app
-from src.config import settings
-from src.database import get_database
-from src.dependencies import get_classifications_collection, get_repository
+from src.config.config import settings
+from src.database.database_utils import get_database
+from src.api.dependencies import get_classifications_collection, get_repository
 
 @pytest.fixture(scope="function")
 async def mock_mongodb() -> AsyncGenerator[AsyncMongoMockClient, None]:

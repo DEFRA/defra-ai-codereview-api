@@ -2,7 +2,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from src.api.v1 import code_reviews, classifications, standard_sets
-from src.database import get_database
+from src.database.database_utils import get_database
 
 app = FastAPI(
     title="Code Review API"

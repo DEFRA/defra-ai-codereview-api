@@ -7,13 +7,14 @@ from typing import List, Dict
 from datetime import datetime, UTC
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorDatabase
-from src.logging_config import setup_logger
+from src.utils.logging_utils import setup_logger
 from src.agents.git_repos_agent import clone_repo
 from src.repositories.classification_repo import ClassificationRepository
 from src.repositories.standard_set_repo import StandardSetRepository
 from src.models.classification import Classification
 from anthropic import Anthropic
-from src.config import settings
+from src.config.config import settings
+from src.database.database_utils import get_database
 
 logger = setup_logger(__name__)
 
@@ -23,7 +24,6 @@ async def process_standard_set(standard_set_id: str, repository_url: str):
         logger.debug(f"Starting to process standard set {standard_set_id} from repository {repository_url}")
         
         # Get database connection
-        from src.database import get_database
         db = await get_database()
 
         # Get repositories

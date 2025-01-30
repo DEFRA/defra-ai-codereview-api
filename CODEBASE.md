@@ -4,26 +4,27 @@
 
 ```
 src/
-├── agents/           # AI agents for different functionalities
+├── agents/           # AI agents for code review and analysis
 ├── api/             # API endpoints and routes
 │   └── v1/         # Version 1 API implementations
-├── models/          # Data models and schemas
-├── repositories/    # Data access layer
-├── services/        # Business logic services
+├── config/         # Configuration modules and settings
+├── database/       # Database operations and initialization
+├── models/         # Data models and schemas
+├── repositories/   # Data access layer
+├── services/       # Business logic services
 ├── utils/          # Utility functions and helpers
-├── config.py       # Configuration settings
-├── database.py     # Database connection handling
-├── database_init.py # Database initialization
-├── dependencies.py  # FastAPI dependencies
-├── logging_config.py # Logging configuration
 └── main.py         # Application entry point
 
 tests/
 ├── integration/    # Integration tests
 ├── unit/          # Unit tests
-├── e2e/           # End-to-end tests
 ├── utils/         # Test utilities
 └── conftest.py    # Test configuration and fixtures
+
+data/              # Data files and resources
+logs/              # Application logs
+scripts/           # Utility scripts
+test_data/         # Local test data files
 ```
 
 ## Source Files (src/)

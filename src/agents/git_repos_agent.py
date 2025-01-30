@@ -4,8 +4,8 @@ import git
 import logging
 from pathlib import Path
 from typing import List, Tuple
-from src.logging_config import setup_logger
-from src.config import settings
+from src.utils.logging_utils import setup_logger
+from src.config.config import settings
 
 logger = setup_logger(__name__)
 

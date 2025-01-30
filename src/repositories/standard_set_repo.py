@@ -4,7 +4,7 @@ from typing import Optional
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorCollection
 from src.models.standard_set import StandardSet, StandardSetCreate, StandardSetWithStandards
-from src.logging_config import setup_logger
+from src.utils.logging_utils import setup_logger
 from pymongo import ReturnDocument
 from pymongo.errors import OperationFailure
 from src.repositories.errors import DatabaseError, RepositoryError

@@ -1,7 +1,7 @@
 """MongoDB database connection and initialization."""
 from motor.motor_asyncio import AsyncIOMotorClient
-from src.config import settings
-from src.database_init import init_database
+from src.config.config import settings
+from src.database.database_init import init_database
 
 # Initialize database with schema validation
 client = AsyncIOMotorClient(settings.MONGO_URI)

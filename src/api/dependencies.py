@@ -3,9 +3,10 @@
 from typing import AsyncGenerator
 from fastapi import Depends
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
-from src.config import settings
+from src.config.config import settings
 from src.repositories.classification_repo import ClassificationRepository
 from src.repositories.standard_set_repo import StandardSetRepository
+from src.database.database_utils import get_database
 
 async def get_classifications_collection() -> AsyncGenerator[AsyncIOMotorCollection, None]:
     """Get classifications collection."""
@@ -20,14 +21,6 @@ async def get_repository(
 ) -> ClassificationRepository:
     """Get repository instance."""
     return ClassificationRepository(collection)
-
-async def get_database() -> AsyncGenerator:
-    """Get database connection."""
-    client = AsyncIOMotorClient(settings.MONGO_URI)
-    try:
-        yield client[settings.MONGO_INITDB_DATABASE]
-    finally:
-        client.close()
 
 async def get_standard_sets_collection():
     """Get standard sets collection."""

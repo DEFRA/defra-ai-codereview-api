@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 from typing import List
 from anthropic import AsyncAnthropic
-from src.logging_config import setup_logger
+from src.utils.logging_utils import setup_logger
 from src.models.classification import Classification
 
 logger = setup_logger(__name__)

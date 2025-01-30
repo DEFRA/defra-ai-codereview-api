@@ -4,7 +4,7 @@ from typing import List, Optional
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorCollection
 from src.models.classification import Classification, ClassificationCreate
-from src.logging_config import setup_logger
+from src.utils.logging_utils import setup_logger
 
 logger = setup_logger(__name__)
 
