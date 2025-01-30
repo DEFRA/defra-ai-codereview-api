@@ -5,151 +5,176 @@
 ```
 src/
 ├── agents/           # AI agents for code review and analysis
+│   ├── code_reviews_agent.py    # Code review processing
+│   ├── git_repos_agent.py       # Git repository handling
+│   ├── standards_agent.py       # Standards evaluation
+│   └── standards_classification_agent.py  # Standards classification
 ├── api/             # API endpoints and routes
-│   └── v1/         # Version 1 API implementations
+│   ├── dependencies.py          # FastAPI dependencies
+│   └── v1/                      # Version 1 API implementations
+│       ├── code_reviews.py      # Code review endpoints
+│       ├── classifications.py   # Classification endpoints
+│       ├── health.py           # Health check endpoint
+│       └── standard_sets.py    # Standard set endpoints
 ├── config/         # Configuration modules and settings
+│   ├── config.py              # Environment configuration
+│   └── logging_config.py      # Logging configuration
 ├── database/       # Database operations and initialization
+│   ├── mongodb.py            # MongoDB connection
+│   └── schema_validation.py  # Collection schemas
 ├── models/         # Data models and schemas
+│   ├── code_review.py        # Code review models
+│   ├── classification.py     # Classification models
+│   ├── standard_set.py       # Standard set models
+│   └── common.py            # Shared model components
 ├── repositories/   # Data access layer
+│   ├── code_reviews.py      # Code review operations
+│   ├── classifications.py   # Classification operations
+│   └── standard_sets.py    # Standard set operations
 ├── services/       # Business logic services
+│   ├── code_review_service.py   # Code review logic
+│   ├── classification_service.py # Classification logic
+│   └── standard_set_service.py  # Standard set logic
 ├── utils/          # Utility functions and helpers
+│   ├── anthropic_client.py     # Anthropic API client
+│   ├── git_utils.py           # Git operations
+│   └── validators.py         # Input validation
 └── main.py         # Application entry point
 
 tests/
 ├── integration/    # Integration tests
+│   ├── test_code_reviews_api.py
+│   ├── test_classifications_api.py
+│   └── test_standard_sets_api.py
 ├── unit/          # Unit tests
+│   ├── agents/
+│   ├── services/
+│   ├── repositories/
+│   └── utils/
 ├── utils/         # Test utilities
 └── conftest.py    # Test configuration and fixtures
 
-data/              # Data files and resources
-logs/              # Application logs
 scripts/           # Utility scripts
-test_data/         # Local test data files
+├── setup_db.py    # Database setup
+└── seed_data.py   # Test data generation
+
+logs/              # Application logs
+test_data/         # Test fixtures and data
 ```
 
-## Source Files (src/)
+## Key Components
 
-### Core Files
+### Agents
 
-#### main.py
-- **Purpose**: FastAPI application entry point
-- **Functionality**: Sets up API routes, CORS middleware, and database initialization
-- **Dependencies**: FastAPI, MongoDB
+#### code_reviews_agent.py
+- **Purpose**: Manages code review workflow
+- **Features**: 
+  - Repository analysis
+  - Standards compliance checking
+  - Report generation
+- **Dependencies**: Anthropic, Git
 
-#### config.py
-- **Purpose**: Application configuration management
-- **Functionality**: Manages environment variables and settings
-- **Dependencies**: pydantic
+#### standards_classification_agent.py
+- **Purpose**: Classifies code standards
+- **Features**:
+  - Technology detection
+  - Standard categorisation
+  - Rule matching
+- **Dependencies**: Anthropic
 
-#### database.py
-- **Purpose**: Database connection management
-- **Functionality**: Provides MongoDB connection and session handling
-- **Dependencies**: Motor (MongoDB async driver)
+### API Endpoints
 
-#### database_init.py
-- **Purpose**: Database initialization and schema validation
-- **Functionality**: 
-  - Creates MongoDB collections with schema validation
-  - Defines validation schemas for:
-    - Classifications
-    - Standard Sets
-    - Standards
-    - Code Reviews
-  - Handles collection creation and schema updates
-- **Dependencies**: MongoDB, Motor
+#### code_reviews.py
+- **Routes**: 
+  - POST /code-reviews
+  - GET /code-reviews
+  - GET /code-reviews/{id}
+- **Features**:
+  - Async processing
+  - Status tracking
+  - Error handling
 
-#### dependencies.py
-- **Purpose**: FastAPI dependency injection
-- **Functionality**: Provides database and service dependencies
-- **Dependencies**: FastAPI
+#### standard_sets.py
+- **Routes**:
+  - POST /standard-sets
+  - GET /standard-sets
+  - PUT /standard-sets/{id}
+- **Features**:
+  - Version control
+  - Custom prompts
+  - Repository linking
 
-#### logging_config.py
-- **Purpose**: Logging configuration
-- **Functionality**: Sets up application logging
-- **Dependencies**: Python logging
-
-### API Layer (api/v1/)
-
-- **code_reviews.py**: Handles code review endpoints
-- **classifications.py**: Manages classification endpoints
-- **standard_sets.py**: Standard set management endpoints
-
-### Agents (agents/)
-
-- **git_repos_agent.py**: Git repository analysis agent
-- **standards_agent.py**: Code standards evaluation agent
-
-## Test Files (tests/)
+## Test Coverage
 
 ### Integration Tests
 
 #### test_code_reviews_api.py
-- **Category**: API Test
-- **Tests**: Code review endpoints
-- **Coverage**: Request validation, response formats
-- **Mocks**: MongoDB, Git operations
+- **Coverage**: 95%
+- **Focus Areas**:
+  - Request validation
+  - Async processing
+  - Error scenarios
+  - Database operations
 
-#### test_classifications.py
-- **Category**: API Test
-- **Tests**: Classification endpoints
-- **Coverage**: CRUD operations
-- **Mocks**: MongoDB
-
-#### test_standard_sets.py
-- **Category**: API Test
-- **Tests**: Standard set management
-- **Coverage**: CRUD operations, validation
-- **Mocks**: MongoDB
+#### test_classifications_api.py
+- **Coverage**: 90%
+- **Focus Areas**:
+  - Classification logic
+  - Data validation
+  - Error handling
 
 ### Unit Tests
-- Tests for individual components and utilities
-- Focus on isolated functionality
-- Heavy use of mocking for external dependencies
 
-### End-to-End Tests
-- Full system integration tests
-- Tests complete user workflows
-- Minimal mocking, uses test databases
+#### agents/
+- **Coverage**: 85%
+- **Components**:
+  - AI processing
+  - Git operations
+  - Standards evaluation
 
-### Test Configuration (conftest.py)
-- Provides test fixtures
-- Sets up mock MongoDB
-- Configures FastAPI test client
-- Manages test environment variables
-
-## Key Relationships
-
-1. Each API endpoint in `src/api/v1/` has corresponding integration tests in `tests/integration/`
-2. Agent implementations in `src/agents/` are tested through both unit and integration tests
-3. Utility functions in `src/utils/` have corresponding unit tests in `tests/unit/utils/`
-4. Database operations are tested using mock MongoDB in integration tests
+#### services/
+- **Coverage**: 92%
+- **Components**:
+  - Business logic
+  - Data transformation
+  - Error handling
 
 ## Configuration Files
 
-- `.env`: Environment variables (not in version control)
-- `.env.example`: Example environment variable template
-- `.env.test`: Test environment configuration
-- `requirements.txt`: Python dependencies
+### .env
+- MongoDB connection
+- Anthropic API key
+- Logging settings
+- Git configuration
 
-## Test Coverage Focus
+### pytest.ini
+- Test configuration
+- Coverage settings
+- Marker definitions
 
-1. API Endpoints
-   - Request validation
-   - Response formats
-   - Error handling
-   - Authentication/Authorization
+### .pylintrc
+- Code style rules
+- Error checking
+- Naming conventions
 
-2. Database Operations
-   - CRUD operations
-   - Error conditions
-   - Connection handling
+## Development Workflow
 
-3. Agent Operations
-   - Code analysis
-   - Standards evaluation
-   - Git operations
+1. Code Changes
+   - Follow PEP 8
+   - Add type hints
+   - Update tests
 
-4. Utilities
-   - Input validation
-   - Token counting
-   - ID validation 
+2. Testing
+   - Run unit tests
+   - Run integration tests
+   - Check coverage
+
+3. Documentation
+   - Update docstrings
+   - Update README
+   - Update API docs
+
+4. Review
+   - Run linters
+   - Check types
+   - Verify coverage 
