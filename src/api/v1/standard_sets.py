@@ -1,28 +1,15 @@
 """Standard sets API endpoints."""
-import asyncio
 from fastapi import APIRouter, HTTPException, Depends, status
-from motor.motor_asyncio import AsyncIOMotorDatabase, AsyncIOMotorCollection
+from bson import ObjectId
 from src.models.standard_set import StandardSet, StandardSetCreate, StandardSetWithStandards
-from src.repositories.standard_set_repo import StandardSetRepository
-from src.api.dependencies import (
-    get_database,
-    get_standard_sets_collection,
-    get_standard_set_repo,
-)
+from src.services.standard_set_service import StandardSetService
+from src.api.dependencies import get_standard_set_service
 from src.utils.logging_utils import setup_logger
 from src.repositories.errors import DatabaseError, RepositoryError
-from bson import ObjectId
 from bson.errors import InvalidId
-from multiprocessing import Process
-from src.agents.standards_agent import process_standard_set
 
 logger = setup_logger(__name__)
-
 router = APIRouter(prefix="/standard-sets", tags=["standard-sets"])
-
-def run_agent_process_sync(standard_set_id: str, repository_url: str):
-    """Run the agent process synchronously."""
-    asyncio.run(process_standard_set(standard_set_id, repository_url))
 
 @router.post("/", 
          response_model=StandardSet,
@@ -34,31 +21,11 @@ def run_agent_process_sync(standard_set_id: str, repository_url: str):
          })
 async def create_standard_set(
     standard_set: StandardSetCreate,
-    db: AsyncIOMotorDatabase = Depends(get_database)
-) -> dict:
+    service: StandardSetService = Depends(get_standard_set_service)
+) -> StandardSet:
     """Create a new standard set."""
     try:
-        # Get the correct collection and pass it to repo
-        collection = db.get_collection("standard_sets")
-        repo = StandardSetRepository(collection)
-        
-        # First try to find if a standard set with this name already exists
-        existing = await repo.find_by_name(standard_set.name)
-        
-        if existing:
-            # If it exists, update it instead of creating new
-            standard_set_doc = await repo.update(standard_set)
-        else:
-            # If it doesn't exist, create new
-            standard_set_doc = await repo.create(standard_set)
-            
-        # Start agent in separate process
-        Process(
-            target=run_agent_process_sync,
-            args=(str(standard_set_doc.id), standard_set.repository_url)
-        ).start()
-        
-        return standard_set_doc
+        return await service.create_standard_set(standard_set)
     except RepositoryError as e:
         if "validation" in str(e).lower() or "invalid" in str(e).lower():
             raise HTTPException(status_code=400, detail=str(e))
@@ -69,12 +36,11 @@ async def create_standard_set(
 
 @router.get("/", response_model=list[StandardSet])
 async def get_standard_sets(
-    standard_set_repo: StandardSetRepository = Depends(get_standard_set_repo)
+    service: StandardSetService = Depends(get_standard_set_service)
 ):
     """Get all standard sets."""
     try:
-        standard_sets = await standard_set_repo.get_all()
-        return standard_sets
+        return await service.get_all_standard_sets()
     except DatabaseError as e:
         logger.error(f"Database error getting standard sets: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -85,17 +51,16 @@ async def get_standard_sets(
 @router.get("/{standard_set_id}", response_model=StandardSetWithStandards)
 async def get_standard_set(
     standard_set_id: str,
-    standard_set_repo: StandardSetRepository = Depends(get_standard_set_repo)
+    service: StandardSetService = Depends(get_standard_set_service)
 ) -> StandardSetWithStandards:
     """Get a standard set by ID."""
     try:
-        if not ObjectId.is_valid(standard_set_id):
-            raise HTTPException(status_code=400, detail="Invalid ObjectId format")
-            
-        standard_set = await standard_set_repo.get_by_id(ObjectId(standard_set_id))
+        standard_set = await service.get_standard_set_by_id(standard_set_id)
         if not standard_set:
             raise HTTPException(status_code=404, detail="Standard set not found")
         return standard_set
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="Invalid ObjectId format")
     except HTTPException:
         raise
     except Exception as e:
@@ -111,7 +76,7 @@ async def get_standard_set(
            })
 async def delete_standard_set(
     standard_set_id: str,
-    standard_set_repo: StandardSetRepository = Depends(get_standard_set_repo)
+    service: StandardSetService = Depends(get_standard_set_service)
 ) -> dict:
     """Delete a standard set and all its associated standards."""
     # Validate ID format first, outside try-except
@@ -119,7 +84,7 @@ async def delete_standard_set(
         raise HTTPException(status_code=400, detail="Invalid ObjectId format")
         
     try:
-        success = await standard_set_repo.delete(ObjectId(standard_set_id))
+        success = await service.delete_standard_set(standard_set_id)
         if not success:
             raise HTTPException(status_code=404, detail="Standard set not found")
         return {"status": "success"}
