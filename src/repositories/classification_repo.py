@@ -5,6 +5,7 @@ from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorCollection
 from src.models.classification import Classification, ClassificationCreate
 from src.utils.logging_utils import setup_logger
+from src.utils.id_validation import ensure_object_id
 
 logger = setup_logger(__name__)
 
@@ -41,10 +42,11 @@ class ClassificationRepository:
     async def get_by_id(self, id: str) -> Optional[Classification]:
         """Get a classification by ID."""
         try:
-            if not ObjectId.is_valid(id):
+            object_id = ensure_object_id(id)
+            if not object_id:
                 return None
                 
-            doc = await self.collection.find_one({"_id": ObjectId(id)})
+            doc = await self.collection.find_one({"_id": object_id})
             if doc:
                 doc["_id"] = str(doc["_id"])
                 return Classification.model_validate(doc)
@@ -72,19 +74,17 @@ class ClassificationRepository:
     async def delete(self, id: str) -> bool:
         """Delete a classification by ID."""
         try:
-            if not ObjectId.is_valid(id):
-                raise ValueError("Invalid ObjectId format")
+            object_id = ensure_object_id(id)
+            if not object_id:
+                return False
             
             # Check if document exists first
-            doc = await self.collection.find_one({"_id": ObjectId(id)})
+            doc = await self.collection.find_one({"_id": object_id})
             if not doc:
                 return False
                 
-            result = await self.collection.delete_one({"_id": ObjectId(id)})
+            result = await self.collection.delete_one({"_id": object_id})
             return result.deleted_count > 0
-        except ValueError as e:
-            logger.error(f"Invalid ID format: {str(e)}")
-            raise
         except Exception as e:
             logger.error(f"Error deleting classification: {str(e)}")
             return False
@@ -92,14 +92,15 @@ class ClassificationRepository:
     async def update(self, id: str, classification: ClassificationCreate) -> Optional[Classification]:
         """Update a classification."""
         try:
-            if not ObjectId.is_valid(id):
+            object_id = ensure_object_id(id)
+            if not object_id:
                 return None
                 
             update_data = classification.model_dump()
             update_data["updated_at"] = datetime.now(UTC)
             
             result = await self.collection.update_one(
-                {"_id": ObjectId(id)},
+                {"_id": object_id},
                 {"$set": update_data}
             )
             

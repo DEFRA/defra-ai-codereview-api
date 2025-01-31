@@ -5,6 +5,7 @@ from src.models.classification import Classification, ClassificationCreate
 from src.services.classification_service import ClassificationService
 from src.api.dependencies import get_classification_service
 from src.utils.logging_utils import setup_logger
+from src.utils.id_validation import ensure_object_id
 
 logger = setup_logger(__name__)
 router = APIRouter()
@@ -54,6 +55,7 @@ async def list_classifications(
            description="Delete a classification",
            responses={
                200: {"description": "Classification deleted successfully"},
+               404: {"description": "Classification not found"},
                400: {"description": "Invalid ObjectId format"}
            })
 async def delete_classification(
@@ -62,6 +64,12 @@ async def delete_classification(
 ):
     """Delete a classification."""
     try:
+        if not ensure_object_id(id):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid ObjectId format"
+            )
+            
         success = await service.delete_classification(id)
         if success:
             return {"status": "success"}
@@ -69,11 +77,8 @@ async def delete_classification(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Classification not found"
         )
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid ObjectId format"
-        )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error deleting classification: {str(e)}")
         raise HTTPException(

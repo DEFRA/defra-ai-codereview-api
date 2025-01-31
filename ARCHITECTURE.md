@@ -11,6 +11,7 @@ graph TD
     Client[Client] --> API[FastAPI Server]
     API --> MongoDB[(MongoDB)]
     API --> Anthropic[Anthropic API]
+    API --> Git[Git Operations]
     
     subgraph FastAPI Application
         API --> Router[API Router]
@@ -31,36 +32,45 @@ graph TD
 - Input validation using Pydantic models
 - Asynchronous request handling
 - API versioning (v1)
+- Health check endpoints
+- Standard set management
+- Classification endpoints
 
 ### 2. Models (`src/models/`)
 - Pydantic models for data validation
 - MongoDB document schemas
 - Type definitions and enums
 - Request/response models
+- Custom type handlers (PyObjectId)
 
 ### 3. Repositories (`src/repositories/`)
 - Data access layer
 - MongoDB operations using Motor
 - CRUD operations for entities
 - Query builders
+- Schema validation enforcement
 
 ### 4. Agents (`src/agents/`)
 - AI agent implementations
 - Anthropic API integration
 - Code analysis logic
 - Standards checking
+- Git repository analysis
+- Classification processing
 
 ### 5. Dependencies (`src/dependencies.py`)
 - FastAPI dependency injection
 - Database connections
 - Configuration management
 - Service initialization
+- Authentication middleware
 
 ### 6. Configuration (`src/config.py`)
 - Environment variables
 - Application settings
 - Service configurations
 - Logging setup
+- Git operation settings
 
 ## Data Model
 
@@ -76,6 +86,8 @@ interface CodeReview {
     compliance_reports: ComplianceReport[]; // Review results
     created_at: DateTime;       // Creation timestamp
     updated_at: DateTime;       // Last update timestamp
+    error_message?: string;     // Optional error message
+    git_ref?: string;          // Optional Git reference (branch/tag)
 }
 
 enum ReviewStatus {
@@ -88,13 +100,29 @@ enum ReviewStatus {
 interface StandardSetInfo {
     _id: ObjectId;             // Standard set identifier
     name: string;              // Name of the standard set
+    version?: string;          // Optional version information
 }
 
 interface ComplianceReport {
     _id: ObjectId;             // Report identifier
     standard_set_name: string; // Name of the standard set
-    file: string;             // File path being reviewed
+    file_path: string;        // File path being reviewed
     report: string;           // Detailed compliance report
+    issues: Issue[];          // List of identified issues
+    score?: number;           // Optional compliance score
+}
+
+interface Issue {
+    severity: IssueSeverity;  // Issue severity level
+    message: string;          // Issue description
+    line_number?: number;     // Optional line number
+    rule_id?: string;        // Optional reference to violated rule
+}
+
+enum IssueSeverity {
+    INFO = "info",
+    WARNING = "warning",
+    ERROR = "error"
 }
 ```
 

@@ -10,6 +10,11 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     
+    # Anthropic settings
+    ANTHROPIC_MODEL: str = "claude-3-5-sonnet-20241022"
+    ANTHROPIC_MAX_TOKENS: int = 8192
+    ANTHROPIC_TEMPERATURE: float = 0.0
+    
     # Feature flags
     LLM_TESTING: bool = False
     LLM_TESTING_STANDARDS_FILES: str = ""

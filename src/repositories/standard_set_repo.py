@@ -5,6 +5,7 @@ from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorCollection
 from src.models.standard_set import StandardSet, StandardSetCreate, StandardSetWithStandards
 from src.utils.logging_utils import setup_logger
+from src.utils.id_validation import ensure_object_id
 from pymongo import ReturnDocument
 from pymongo.errors import OperationFailure
 from src.repositories.errors import DatabaseError, RepositoryError
@@ -30,7 +31,7 @@ class StandardSetRepository:
             # If exists, delete associated standards first
             if existing:
                 await self.standards_collection.delete_many(
-                    {"standard_set_id": str(existing["_id"])}
+                    {"standard_set_id": existing["_id"]}
                 )
             
             # Prepare new document
@@ -112,16 +113,20 @@ class StandardSetRepository:
             logger.error(f"Error finding standard set by name: {e}")
             raise RepositoryError(f"Error finding standard set by name: {e}") 
 
-    async def get_by_id(self, id: ObjectId) -> Optional[StandardSetWithStandards]:
+    async def get_by_id(self, id: str) -> Optional[StandardSetWithStandards]:
         """Get a standard set by ID including its associated standards."""
         try:
-            standard_set = await self.collection.find_one({"_id": id})
+            object_id = ensure_object_id(id)
+            if not object_id:
+                return None
+                
+            standard_set = await self.collection.find_one({"_id": object_id})
             if not standard_set:
                 return None
             
             # Get associated standards
             standards = await self.standards_collection.find(
-                {"standard_set_id": id}
+                {"standard_set_id": object_id}
             ).to_list(None)
             
             # Convert ObjectIds to strings in standards
@@ -142,16 +147,20 @@ class StandardSetRepository:
             logger.error(f"Error getting standard set by ID: {e}")
             raise RepositoryError(f"Error getting standard set by ID: {e}")
 
-    async def delete(self, id: ObjectId) -> bool:
+    async def delete(self, id: str) -> bool:
         """Delete a standard set and all its associated standards."""
         try:
+            object_id = ensure_object_id(id)
+            if not object_id:
+                return False
+                
             # Delete associated standards first
             await self.standards_collection.delete_many(
-                {"standard_set_id": str(id)}
+                {"standard_set_id": object_id}
             )
             
             # Delete the standard set
-            result = await self.collection.delete_one({"_id": id})
+            result = await self.collection.delete_one({"_id": object_id})
             return result.deleted_count > 0
         except Exception as e:
             logger.error(f"Error deleting standard set: {e}")

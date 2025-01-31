@@ -7,6 +7,7 @@ from src.api.dependencies import get_standard_set_service
 from src.utils.logging_utils import setup_logger
 from src.repositories.errors import DatabaseError, RepositoryError
 from bson.errors import InvalidId
+from src.utils.id_validation import ensure_object_id
 
 logger = setup_logger(__name__)
 router = APIRouter(prefix="/standard-sets", tags=["standard-sets"])
@@ -55,12 +56,13 @@ async def get_standard_set(
 ) -> StandardSetWithStandards:
     """Get a standard set by ID."""
     try:
+        if not ensure_object_id(standard_set_id):
+            raise HTTPException(status_code=400, detail="Invalid ObjectId format")
+            
         standard_set = await service.get_standard_set_by_id(standard_set_id)
         if not standard_set:
             raise HTTPException(status_code=404, detail="Standard set not found")
         return standard_set
-    except InvalidId:
-        raise HTTPException(status_code=400, detail="Invalid ObjectId format")
     except HTTPException:
         raise
     except Exception as e:
@@ -79,21 +81,19 @@ async def delete_standard_set(
     service: StandardSetService = Depends(get_standard_set_service)
 ) -> dict:
     """Delete a standard set and all its associated standards."""
-    # Validate ID format first, outside try-except
-    if not ObjectId.is_valid(standard_set_id):
-        raise HTTPException(status_code=400, detail="Invalid ObjectId format")
-        
     try:
+        if not ensure_object_id(standard_set_id):
+            raise HTTPException(status_code=400, detail="Invalid ObjectId format")
+            
         success = await service.delete_standard_set(standard_set_id)
         if not success:
             raise HTTPException(status_code=404, detail="Standard set not found")
         return {"status": "success"}
+    except HTTPException:
+        raise
     except DatabaseError as e:
         logger.error(f"Database error deleting standard set: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-    except HTTPException as e:
-        # Re-raise HTTP exceptions directly
-        raise e
     except Exception as e:
         logger.error(f"Unexpected error deleting standard set: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") 

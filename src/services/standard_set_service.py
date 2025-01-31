@@ -2,7 +2,6 @@
 from typing import List, Optional
 from multiprocessing import Process
 from motor.motor_asyncio import AsyncIOMotorDatabase
-from bson import ObjectId
 from src.models.standard_set import StandardSet, StandardSetCreate, StandardSetWithStandards
 from src.repositories.standard_set_repo import StandardSetRepository
 from src.utils.logging_utils import setup_logger
@@ -44,11 +43,11 @@ class StandardSetService:
 
     async def get_standard_set_by_id(self, id: str) -> Optional[StandardSetWithStandards]:
         """Get a specific standard set."""
-        return await self.repo.get_by_id(ObjectId(id))
+        return await self.repo.get_by_id(id)
 
     async def delete_standard_set(self, id: str) -> bool:
         """Delete a standard set."""
-        return await self.repo.delete(ObjectId(id))
+        return await self.repo.delete(id)
 
     @staticmethod
     def _run_agent_process_sync(standard_set_id: str, repository_url: str):

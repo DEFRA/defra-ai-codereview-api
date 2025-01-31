@@ -13,7 +13,6 @@ kanban-plugin: board
 
 ## To Do
 
-
 - [ ] Get running on CDP dev w/ bedrock
 - [ ] add local LLM ollama dev for backend
 - [ ] verify - logging_config - only write to logfile when running locally, not in aws envs
@@ -24,13 +23,13 @@ kanban-plugin: board
 
 ## Doing
 
-- [ ] refactor - see snag list canvas
 - [ ] improve testing and refactoring prompts
 
 
 ## Done
 
 **Complete**
+- [x] refactor - see snag list canvas
 - [x] Update Docs in code checker tool
 - [x] review .cursorrules
 - [x] merge 5.5 branch into standards ingest

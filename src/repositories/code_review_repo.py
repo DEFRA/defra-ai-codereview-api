@@ -23,10 +23,13 @@ class CodeReviewRepository:
             # Create initial document with properly formatted standard_sets
             standard_sets_info = []
             for set_id in code_review.standard_sets:
-                standard_set = await self.standard_sets_collection.find_one({"_id": ObjectId(set_id)})
+                object_id = ensure_object_id(set_id)
+                if not object_id:
+                    continue
+                standard_set = await self.standard_sets_collection.find_one({"_id": object_id})
                 if standard_set:
                     standard_sets_info.append({
-                        "_id": ObjectId(set_id),
+                        "_id": object_id,
                         "name": standard_set["name"]
                     })
 
@@ -68,10 +71,10 @@ class CodeReviewRepository:
     async def get_by_id(self, id: str) -> Optional[CodeReview]:
         """Get a code review by ID."""
         try:
-            if not ObjectId.is_valid(id):
-                raise ValueError("Invalid ObjectId format")
+            object_id = ensure_object_id(id)
+            if not object_id:
+                return None
                 
-            object_id = ObjectId(id)
             review = await self.collection.find_one({"_id": object_id})
             
             if review:
@@ -80,9 +83,6 @@ class CodeReviewRepository:
                 review['standard_sets'] = standard_sets_info
                 return CodeReview(**review)
             return None
-        except ValueError as e:
-            logger.error(f"Invalid ID format: {str(e)}")
-            raise
         except Exception as e:
             logger.error(f"Error getting code review by ID: {str(e)}")
             raise
@@ -117,11 +117,12 @@ class CodeReviewRepository:
                 })
             else:
                 standard_set_id = standard_set
-                if isinstance(standard_set_id, ObjectId):
-                    standard_set_id = str(standard_set_id)
+                object_id = ensure_object_id(standard_set_id)
+                if not object_id:
+                    continue
                 
                 standard_set_doc = await self.standard_sets_collection.find_one(
-                    {"_id": ObjectId(standard_set_id)}
+                    {"_id": object_id}
                 )
                 if standard_set_doc:
                     standard_sets_info.append({
