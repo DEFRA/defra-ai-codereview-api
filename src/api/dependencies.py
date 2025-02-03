@@ -1,7 +1,7 @@
 """FastAPI dependency injection."""
 
 from typing import AsyncGenerator
-from fastapi import Depends
+from fastapi import Depends, Request
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection, AsyncIOMotorDatabase
 from src.config.config import settings
 from src.repositories.classification_repo import ClassificationRepository
@@ -10,29 +10,28 @@ from src.repositories.code_review_repo import CodeReviewRepository
 from src.services.code_review_service import CodeReviewService
 from src.services.classification_service import ClassificationService
 from src.services.standard_set_service import StandardSetService
-from src.database.database_utils import get_database
 
-async def get_classifications_collection() -> AsyncGenerator[AsyncIOMotorCollection, None]:
+async def get_db(request: Request) -> AsyncIOMotorDatabase:
+    """Get database from app state."""
+    return request.app.state.db
+
+async def get_classifications_collection(
+    db: AsyncIOMotorDatabase = Depends(get_db)
+) -> AsyncIOMotorCollection:
     """Get classifications collection."""
-    client = AsyncIOMotorClient(settings.MONGO_URI)
-    try:
-        yield client[settings.MONGO_INITDB_DATABASE].classifications
-    finally:
-        client.close()
+    return db.classifications
 
 async def get_repository(
     collection: AsyncIOMotorCollection = Depends(get_classifications_collection)
 ) -> ClassificationRepository:
-    """Get repository instance."""
+    """Get classification repository instance."""
     return ClassificationRepository(collection)
 
-async def get_standard_sets_collection():
+async def get_standard_sets_collection(
+    db: AsyncIOMotorDatabase = Depends(get_db)
+) -> AsyncIOMotorCollection:
     """Get standard sets collection."""
-    client = AsyncIOMotorClient(settings.MONGO_URI)
-    try:
-        yield client[settings.MONGO_INITDB_DATABASE].standard_sets
-    finally:
-        client.close()
+    return db.standard_sets
 
 async def get_standard_set_repo(
     collection: AsyncIOMotorCollection = Depends(get_standard_sets_collection)
@@ -40,13 +39,11 @@ async def get_standard_set_repo(
     """Get standard set repository instance."""
     return StandardSetRepository(collection)
 
-async def get_code_reviews_collection() -> AsyncGenerator[AsyncIOMotorCollection, None]:
+async def get_code_reviews_collection(
+    db: AsyncIOMotorDatabase = Depends(get_db)
+) -> AsyncIOMotorCollection:
     """Get code reviews collection."""
-    client = AsyncIOMotorClient(settings.MONGO_URI)
-    try:
-        yield client[settings.MONGO_INITDB_DATABASE].code_reviews
-    finally:
-        client.close()
+    return db.code_reviews
 
 async def get_code_review_repo(
     collection: AsyncIOMotorCollection = Depends(get_code_reviews_collection)
@@ -55,21 +52,21 @@ async def get_code_review_repo(
     return CodeReviewRepository(collection)
 
 async def get_code_review_service(
-    db: AsyncIOMotorDatabase = Depends(get_database),
+    db: AsyncIOMotorDatabase = Depends(get_db),
     repo: CodeReviewRepository = Depends(get_code_review_repo)
 ) -> CodeReviewService:
     """Get code review service instance."""
     return CodeReviewService(db, repo)
 
 async def get_classification_service(
-    db: AsyncIOMotorDatabase = Depends(get_database),
+    db: AsyncIOMotorDatabase = Depends(get_db),
     repo: ClassificationRepository = Depends(get_repository)
 ) -> ClassificationService:
     """Get classification service instance."""
     return ClassificationService(db, repo)
 
 async def get_standard_set_service(
-    db: AsyncIOMotorDatabase = Depends(get_database),
+    db: AsyncIOMotorDatabase = Depends(get_db),
     repo: StandardSetRepository = Depends(get_standard_set_repo)
 ) -> StandardSetService:
     """Get standard set service instance."""
