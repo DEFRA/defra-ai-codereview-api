@@ -1,3 +1,7 @@
+---
+description: Project Overview
+globs: *.*
+---
 # Project Overview
 
 ## Stack

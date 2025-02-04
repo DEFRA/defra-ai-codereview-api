@@ -1,3 +1,7 @@
+---
+description: Code Style for FASTAPI Projects
+globs: *.py
+---
 # Code Style Guide
 
 ## Base Standards

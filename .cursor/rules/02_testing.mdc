@@ -1,0 +1,76 @@
+---
+description: Testing Standards for FastAPI projects
+globs: test_*.py
+---
+# Testing Standards
+
+## Core Principles
+- Test behaviour, not implementation.
+- Prefer integration tests over isolated unit tests. Testing multiple units together in a functional way
+- Mock only at the lowest level (e.g. database operations. API calls, etc).
+- Prioritise clarity and readability.
+- Follow Given-When-Then pattern with inline comments
+
+## Test Structure
+```python
+# Given: Set up preconditions (e.g. mocks, test data)
+mock_database_setup.operation.return_value = expected_value
+
+# When: Execute the action under test
+response = await client.method("/endpoint", json=payload)
+
+# Then: Assert outcomes and verify interactions
+assert response.status_code == expected_status
+assert expected_data in response.json()
+mock_database_setup.operation.assert_called_once()
+```
+
+## Test Cases
+- **Happy Path**: Ensure that valid data produces expected responses and database state.
+- **Error Cases**: Cover invalid input (400), resource not found (404), server errors (500) and dependency failures e.g. database failures
+
+## Best Practices
+- **Organisation**: Group tests by endpoint or operation.
+- **Naming**: Use descriptive test names (e.g. `test_operation_scenario_expected`).
+- **Fixtures**: Use fixtures for common test data and mocks.
+- **Assertions**: Validate status codes first, then response bodies, and finally verify any database interactions.
+- **Async Testing**: Use AsyncClient for async endpoints and AsyncMock for async operations.
+
+## Mocking & Fixtures
+- **Database Mocking**:  
+  - Use a fixture (e.g. in `conftest.py`) to set up common MongoDB operation mocks.
+  - Example for a `find_one` operation:  
+    ```python
+    mock_database_setup.collection.find_one.return_value = {"_id": ObjectId(), "field": "value"}
+    ```
+- **Schema-Based Data**:  
+  - Create fixtures that generate schema-compliant test documents including required fields and timestamps.
+  - Example:
+    ```python
+    def _create_doc(**kwargs) -> dict:
+        return {
+            "_id": ObjectId(),
+            "required_field": kwargs.get("value"),
+            "created_at": datetime.now(UTC)
+        }
+    ```
+
+## Tools & Frameworks
+- **pytest** with **pytest-asyncio** for async tests.
+- **pytest-cov** for coverage (minimum 80%).
+- **httpx** AsyncClient for async HTTP testing.
+- FastAPI’s **TestClient** for synchronous tests.
+
+## FastAPI Testing Guidelines
+- Configure TestClient/AsyncClient with the correct `base_url` and manage lifespan events.
+- Override dependency providers (not the implementations) and reset overrides between tests.
+- Validate responses against both status codes and Pydantic models.
+
+## Test Directory Structure
+```bash
+tests/
+├── conftest.py   # Fixtures and configuration
+├── integration/  # Integration tests
+├── unit/         # Unit tests   
+└── utils/        # Utility functions
+```
