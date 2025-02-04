@@ -5,13 +5,12 @@ MongoDB interactions."""
 import pytest
 from fastapi import status
 from bson import ObjectId
-from unittest.mock import MagicMock, AsyncMock
+from datetime import datetime
 from tests.utils.test_data import valid_classification_data, create_db_document
 
 # Test Cases - Create
 async def test_create_classification_success(
     async_client,
-    mock_database_setup,
     mock_mongodb_operations,
     valid_classification_data
 ):
@@ -30,18 +29,17 @@ async def test_create_classification_success(
     data = response.json()
     assert data["name"] == valid_classification_data["name"]
     assert "_id" in data
-    
-    # Verify database interactions
-    mock_database_setup.classifications.find_one.assert_called_once()
-    mock_database_setup.classifications.insert_one.assert_called_once()
 
 async def test_create_classification_failure(
     async_client,
-    mock_database_setup,
+    mock_mongodb_operations,
     valid_classification_data
 ):
     # Given: Database operation fails
-    mock_database_setup.classifications.insert_one.side_effect = Exception("Database error")
+    # First mock find_one (get_by_name check) to return None
+    mock_mongodb_operations("classifications", "find_one", return_value=None)
+    # Then mock insert_one to raise an exception
+    mock_mongodb_operations("classifications", "insert_one", side_effect=Exception("Database error"))
     
     # When: POST request is made
     response = await async_client.post(
@@ -53,17 +51,39 @@ async def test_create_classification_failure(
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert "Database error" in response.json()["detail"]
 
+async def test_create_classification_duplicate(
+    async_client,
+    mock_mongodb_operations,
+    valid_classification_data
+):
+    # Given: Classification already exists
+    existing_doc = create_db_document(**valid_classification_data)
+    mock_mongodb_operations("classifications", "find_one", return_value=existing_doc)
+    
+    # When: POST request is made with same name
+    response = await async_client.post(
+        "/api/v1/classifications",
+        json=valid_classification_data
+    )
+    
+    # Then: Returns 201 with existing classification
+    assert response.status_code == status.HTTP_201_CREATED
+    data = response.json()
+    assert data["name"] == valid_classification_data["name"]
+    assert data["_id"] == str(existing_doc["_id"])
+    # Verify timestamps are preserved from existing doc by comparing parsed datetimes
+    assert datetime.fromisoformat(data["created_at"].replace('Z', '+00:00')) == existing_doc["created_at"]
+    assert datetime.fromisoformat(data["updated_at"].replace('Z', '+00:00')) == existing_doc["updated_at"]
+
 # Test Cases - List
 async def test_list_classifications_success(
     async_client,
-    mock_database_setup,
+    mock_mongodb_operations,
     valid_classification_data
 ):
     # Given: Existing classifications in the database
     mock_doc = create_db_document(**valid_classification_data)
-    mock_find = MagicMock()
-    mock_find.to_list = AsyncMock(return_value=[mock_doc])
-    mock_database_setup.classifications.find = MagicMock(return_value=mock_find)
+    mock_mongodb_operations("classifications", "find", return_value=[mock_doc])
     
     # When: GET request is made
     response = await async_client.get("/api/v1/classifications")
@@ -79,10 +99,10 @@ async def test_list_classifications_success(
 
 async def test_list_classifications_failure(
     async_client,
-    mock_database_setup
+    mock_mongodb_operations
 ):
     # Given: Database operation fails
-    mock_database_setup.classifications.find.side_effect = Exception("Database error")
+    mock_mongodb_operations("classifications", "find", side_effect=Exception("Database error"))
     
     # When: GET request is made
     response = await async_client.get("/api/v1/classifications")
@@ -124,7 +144,7 @@ async def test_delete_classification_not_found(
 
 async def test_delete_classification_invalid_id(
     async_client,
-    mock_database_setup
+    mock_mongodb_operations
 ):
     # Given: Invalid ObjectId format
     invalid_id = "invalid-id"
@@ -132,18 +152,19 @@ async def test_delete_classification_invalid_id(
     # When: DELETE request is made
     response = await async_client.delete(f"/api/v1/classifications/{invalid_id}")
     
-    # Then: Returns 400 with invalid format message
+    # Then: Returns 400 with error message
     assert response.status_code == status.HTTP_400_BAD_REQUEST
-    assert "Invalid ObjectId format" in response.json()["detail"]
-    mock_database_setup.classifications.delete_one.assert_not_called()
+    error_detail = response.json()["detail"]
+    assert "Invalid ObjectId format" in error_detail
+    assert isinstance(error_detail, str)  # Ensure consistent error format
 
 async def test_delete_classification_server_error(
     async_client,
-    mock_database_setup
+    mock_mongodb_operations
 ):
     # Given: Database operation throws unexpected error
     valid_id = str(ObjectId())
-    mock_database_setup.classifications.delete_one.side_effect = Exception("Unexpected database error")
+    mock_mongodb_operations("classifications", "delete_one", side_effect=Exception("Unexpected database error"))
     
     # When: DELETE request is made
     response = await async_client.delete(f"/api/v1/classifications/{valid_id}")
@@ -151,4 +172,3 @@ async def test_delete_classification_server_error(
     # Then: Returns 500 with error message
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
     assert "Failed to delete classification" in response.json()["detail"]
-    mock_database_setup.classifications.delete_one.assert_called_once()

@@ -22,15 +22,33 @@ def valid_code_review_data():
     }
 
 @pytest.fixture
-def valid_standard_set_data():
-    """Create valid standard set test data."""
+def standard_set_data():
+    """Test data for standard set creation."""
     return {
-        "name": "Test Standard Set",
-        "description": "Test Description",
+        "name": "Test Standards",
+        "repository_url": "https://github.com/org/test-standards",
+        "custom_prompt": "Test prompt for standards analysis"
+    }
+
+@pytest.fixture
+def standard_set_with_standards():
+    """Test data for standard set with standards."""
+    return {
+        "_id": str(ObjectId()),
+        "name": "Test Standards",
+        "repository_url": "https://github.com/org/test-standards",
+        "custom_prompt": "Test prompt for standards analysis",
+        "created_at": datetime.now(UTC).isoformat(),
+        "updated_at": datetime.now(UTC).isoformat(),
         "standards": [
             {
-                "name": "Test Standard",
-                "description": "Test Description"
+                "_id": str(ObjectId()),
+                "title": "Test Standard 1",
+                "description": "Test description 1",
+                "category": "security",
+                "severity": "high",
+                "created_at": datetime.now(UTC).isoformat(),
+                "updated_at": datetime.now(UTC).isoformat()
             }
         ]
     }

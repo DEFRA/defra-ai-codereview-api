@@ -3,6 +3,7 @@ import pytest
 from fastapi.testclient import TestClient
 from httpx import AsyncClient, ASGITransport
 from unittest.mock import AsyncMock, patch, MagicMock
+from typing import Any, Dict, List, Optional, Union
 from src.main import app
 from datetime import datetime, UTC
 from bson import ObjectId
@@ -71,19 +72,83 @@ def mock_mongodb_response():
 
 @pytest.fixture
 def mock_mongodb_operations(mock_database_setup):
-    """Helper to setup common MongoDB operation mocks."""
-    def setup_mocks(collection: str, operation: str, **kwargs):
-        """Setup mocks for a specific collection and operation."""
-        collection_mock = getattr(mock_database_setup, collection)
+    """Helper to setup common MongoDB operation mocks.
+    
+    Provides a consistent way to mock MongoDB operations across tests.
+    Supports both return values and side effects for all common operations.
+    
+    Args:
+        mock_database_setup: The base database mock fixture
         
+    Returns:
+        A function to setup specific MongoDB operation mocks
+    """
+    def setup_mocks(
+        collection: str,
+        operation: str,
+        **kwargs: Dict[str, Any]
+    ) -> None:
+        """Setup mocks for a specific collection and operation.
+        
+        Args:
+            collection: Name of the MongoDB collection
+            operation: Name of the operation to mock (find_one, insert_one, etc.)
+            **kwargs: Additional arguments for the mock
+                - return_value: The value to return
+                - side_effect: Exception or function to raise/call
+                - deleted_count: Number of deleted documents
+                - modified_count: Number of modified documents
+                - matched_count: Number of matched documents
+                - inserted_id: ObjectId of inserted document
+        """
+        collection_mock = getattr(mock_database_setup, collection)
+        operation_mock = getattr(collection_mock, operation, None)
+        
+        if operation_mock is None:
+            raise ValueError(f"Unsupported operation: {operation}")
+            
+        # Reset any previous mocks
+        if hasattr(operation_mock, 'reset_mock'):
+            operation_mock.reset_mock()
+        
+        # Handle side_effect if provided
+        if "side_effect" in kwargs:
+            operation_mock.side_effect = kwargs["side_effect"]
+            return
+
+        # Handle return values based on operation type
         if operation == "find_one":
-            collection_mock.find_one.return_value = kwargs.get("return_value")
+            operation_mock.return_value = kwargs.get("return_value")
+        elif operation == "find":
+            mock_find = MagicMock()
+            mock_find.to_list = AsyncMock(return_value=kwargs.get("return_value", []))
+            collection_mock.find = MagicMock(return_value=mock_find)
+        elif operation == "find_one_and_replace":
+            operation_mock.return_value = kwargs.get("return_value")
+        elif operation == "find_one_and_update":
+            operation_mock.return_value = kwargs.get("return_value")
         elif operation == "insert_one":
-            collection_mock.insert_one.return_value.inserted_id = kwargs.get("inserted_id", ObjectId())
+            mock_result = MagicMock()
+            mock_result.inserted_id = kwargs.get("inserted_id", ObjectId())
+            operation_mock.return_value = mock_result
         elif operation == "delete_one":
-            collection_mock.delete_one.return_value.deleted_count = kwargs.get("deleted_count", 1)
+            mock_result = MagicMock()
+            mock_result.deleted_count = kwargs.get("deleted_count", 1)
+            operation_mock.return_value = mock_result
+        elif operation == "delete_many":
+            mock_result = MagicMock()
+            mock_result.deleted_count = kwargs.get("deleted_count", 1)
+            operation_mock.return_value = mock_result
         elif operation == "update_one":
-            collection_mock.update_one.return_value.modified_count = kwargs.get("modified_count", 1)
-            collection_mock.update_one.return_value.matched_count = kwargs.get("matched_count", 1)
+            mock_result = MagicMock()
+            mock_result.modified_count = kwargs.get("modified_count", 1)
+            mock_result.matched_count = kwargs.get("matched_count", 1)
+            operation_mock.return_value = mock_result
+        elif operation == "replace_one":
+            mock_result = MagicMock()
+            mock_result.modified_count = kwargs.get("modified_count", 1)
+            operation_mock.return_value = mock_result
+        elif operation == "count_documents":
+            operation_mock.return_value = kwargs.get("return_value", 0)
             
     return setup_mocks 
