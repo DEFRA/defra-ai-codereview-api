@@ -6,14 +6,7 @@ import pytest
 from fastapi import status
 from bson import ObjectId
 from unittest.mock import MagicMock, AsyncMock
-
-# Test Data
-@pytest.fixture
-def valid_classification_data():
-    """Create valid classification test data."""
-    return {
-        "name": "Test Classification"
-    }
+from tests.utils.test_data import valid_classification_data, create_db_document
 
 # Test Cases - Create
 async def test_create_classification_success(
@@ -64,11 +57,12 @@ async def test_create_classification_failure(
 async def test_list_classifications_success(
     async_client,
     mock_database_setup,
-    mock_mongodb_response
+    valid_classification_data
 ):
     # Given: Existing classifications in the database
+    mock_doc = create_db_document(**valid_classification_data)
     mock_find = MagicMock()
-    mock_find.to_list = AsyncMock(return_value=[mock_mongodb_response()])
+    mock_find.to_list = AsyncMock(return_value=[mock_doc])
     mock_database_setup.classifications.find = MagicMock(return_value=mock_find)
     
     # When: GET request is made
@@ -78,8 +72,10 @@ async def test_list_classifications_success(
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
     assert len(data) == 1
-    assert "name" in data[0]
+    assert data[0]["name"] == valid_classification_data["name"]
     assert "_id" in data[0]
+    assert "created_at" in data[0]
+    assert "updated_at" in data[0]
 
 async def test_list_classifications_failure(
     async_client,
