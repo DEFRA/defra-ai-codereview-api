@@ -56,8 +56,10 @@ async def get_standard_set(
 ) -> StandardSetWithStandards:
     """Get a standard set by ID."""
     try:
-        if not ensure_object_id(standard_set_id):
-            raise HTTPException(status_code=400, detail="Invalid ObjectId format")
+        try:
+            object_id = ensure_object_id(standard_set_id)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
             
         standard_set = await service.get_standard_set_by_id(standard_set_id)
         if not standard_set:
