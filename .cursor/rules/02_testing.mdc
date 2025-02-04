@@ -7,7 +7,7 @@ globs: test_*.py
 ## Core Principles
 - Test behaviour, not implementation.
 - Prefer integration tests over isolated unit tests. Testing multiple units together in a functional way
-- Mock external dependencies only, at the lowest level (e.g. database operations. API calls, etc).
+- Mock external dependencies only, at the lowest level (e.g. database operations, API calls, etc).
 - Prioritise clarity and readability.
 - Follow Given-When-Then pattern with inline comments
 
@@ -26,53 +26,53 @@ globs: test_*.py
   - Review conftest.py for established mocking approaches
   - Reuse existing test data from test_data.py
 
-## Mocking & Fixtures
-- **Database Mocking**:  
-  - Use the `mock_mongodb_operations` fixture from `conftest.py` to set up MongoDB operation mocks.
-  - Example usage:
-    ```python
-    # Mock a find_one operation
-    mock_mongodb_operations("classifications", "find_one", return_value=mock_doc)
-    
-    # Mock an operation with error
-    mock_mongodb_operations("classifications", "insert_one", side_effect=Exception("Database error"))
-    
-    # Mock delete operation with count
-    mock_mongodb_operations("classifications", "delete_one", deleted_count=1)
-    ```
+## Database Mocking Approach
+We use direct collection mocking for all database operations. This provides clearer and more maintainable tests.
 
-- **Schema-Based Data**:
-  - Use the `create_db_document` function from `test_data.py` to generate test documents
-  - Documents should include all required fields, timestamps, and ObjectId
-  - Example:
-    ```python
-    mock_doc = create_db_document(
-        name="Test Classification",
-        # Add other required fields
-    )
-    ```
+### Collection Operation Mocking
+Mock MongoDB operations directly on the collection object:
 
-- **MongoDB Operation Support**:
-  The `mock_mongodb_operations` fixture supports:
-  - Common operations: `find_one`, `find`, `insert_one`, `delete_one`, `update_one`, etc.
-  - Operation results: `deleted_count`, `modified_count`, `matched_count`, `inserted_id`
-  - Error simulation via `side_effect`
-  - Cursor operations for `find` (with `to_list`)
+```python
+# Mock find_one operation
+collection.find_one = AsyncMock(return_value=mock_doc)
 
-- **Best Practices**:
-  1. ALWAYS use `mock_mongodb_operations` instead of direct mock setup
-  2. Mock at collection operation level (e.g., "classifications", "find_one")
-  3. Include proper result objects (e.g., deleted_count for delete operations)
-  4. Reference `test_classifications.py` for comprehensive examples
+# Mock find operation with cursor
+mock_cursor = AsyncMock()
+mock_cursor.to_list = AsyncMock(return_value=[mock_doc])
+collection.find = MagicMock(return_value=mock_cursor)
 
-- ## Test Data Management**:
-  1. ALL test data should be in test_data.py
-  2. ALWAYS check test_data.py for existing fixtures first
-  3. Add new fixtures to test_data.py, not in test files
+# Mock insert operation
+collection.insert_one = AsyncMock()
+
+# Mock delete operation with count
+mock_result = AsyncMock()
+mock_result.deleted_count = 1
+collection.delete_one = AsyncMock(return_value=mock_result)
+
+# Mock update operation
+mock_result = AsyncMock()
+mock_result.modified_count = 1
+collection.update_one = AsyncMock(return_value=mock_result)
+
+# Mock error cases
+collection.operation = AsyncMock(side_effect=Exception("Database error"))
+```
+
+### Test Data Management
+1. ALL test data should be in test_data.py
+2. Use `create_db_document` for generating test documents
+3. Include all required fields, timestamps, and ObjectId
+4. Example:
+```python
+mock_doc = create_db_document(
+    name="Test Classification",
+    # Add other required fields
+)
+```
 
 ## Tools & Frameworks
 - **pytest** with **pytest-asyncio** for async tests.
-- **pytest-cov** for coverage (minimum 80%).
+- **pytest-cov** for coverage (minimum 90%).
 - **httpx** AsyncClient for async HTTP testing.
 - FastAPI's **TestClient** for synchronous tests.
 
@@ -86,6 +86,6 @@ globs: test_*.py
 tests/
 ├── conftest.py   # Fixtures and configuration
 ├── integration/  # Integration tests
-├── unit/         # Unit tests   
-└── utils/        # Utility functions
-```
+├── unit/        # Unit tests   
+└── utils/       # Utility functions
+``` 
