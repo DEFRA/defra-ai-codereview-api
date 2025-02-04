@@ -7,23 +7,9 @@ globs: test_*.py
 ## Core Principles
 - Test behaviour, not implementation.
 - Prefer integration tests over isolated unit tests. Testing multiple units together in a functional way
-- Mock only at the lowest level (e.g. database operations. API calls, etc).
+- Mock external dependencies only, at the lowest level (e.g. database operations. API calls, etc).
 - Prioritise clarity and readability.
 - Follow Given-When-Then pattern with inline comments
-
-## Test Structure
-```python
-# Given: Set up preconditions (e.g. mocks, test data)
-mock_database_setup.operation.return_value = expected_value
-
-# When: Execute the action under test
-response = await client.method("/endpoint", json=payload)
-
-# Then: Assert outcomes and verify interactions
-assert response.status_code == expected_status
-assert expected_data in response.json()
-mock_database_setup.operation.assert_called_once()
-```
 
 ## Test Cases
 - **Happy Path**: Ensure that valid data produces expected responses and database state.
@@ -33,33 +19,62 @@ mock_database_setup.operation.assert_called_once()
 - **Organisation**: Group tests by endpoint or operation.
 - **Naming**: Use descriptive test names (e.g. `test_operation_scenario_expected`).
 - **Fixtures**: Use fixtures for common test data and mocks.
-- **Assertions**: Validate status codes first, then response bodies, and finally verify any database interactions.
+- **Assertions**: Validate status codes first, then response bodies.
 - **Async Testing**: Use AsyncClient for async endpoints and AsyncMock for async operations.
+- **Look for existing test patterns first**:
+  - Check similar test files for patterns
+  - Review conftest.py for established mocking approaches
+  - Reuse existing test data from test_data.py
 
 ## Mocking & Fixtures
 - **Database Mocking**:  
-  - Use a fixture (e.g. in `conftest.py`) to set up common MongoDB operation mocks.
-  - Example for a `find_one` operation:  
+  - Use the `mock_mongodb_operations` fixture from `conftest.py` to set up MongoDB operation mocks.
+  - Example usage:
     ```python
-    mock_database_setup.collection.find_one.return_value = {"_id": ObjectId(), "field": "value"}
+    # Mock a find_one operation
+    mock_mongodb_operations("classifications", "find_one", return_value=mock_doc)
+    
+    # Mock an operation with error
+    mock_mongodb_operations("classifications", "insert_one", side_effect=Exception("Database error"))
+    
+    # Mock delete operation with count
+    mock_mongodb_operations("classifications", "delete_one", deleted_count=1)
     ```
-- **Schema-Based Data**:  
-  - Create fixtures that generate schema-compliant test documents including required fields and timestamps.
+
+- **Schema-Based Data**:
+  - Use the `create_db_document` function from `test_data.py` to generate test documents
+  - Documents should include all required fields, timestamps, and ObjectId
   - Example:
     ```python
-    def _create_doc(**kwargs) -> dict:
-        return {
-            "_id": ObjectId(),
-            "required_field": kwargs.get("value"),
-            "created_at": datetime.now(UTC)
-        }
+    mock_doc = create_db_document(
+        name="Test Classification",
+        # Add other required fields
+    )
     ```
+
+- **MongoDB Operation Support**:
+  The `mock_mongodb_operations` fixture supports:
+  - Common operations: `find_one`, `find`, `insert_one`, `delete_one`, `update_one`, etc.
+  - Operation results: `deleted_count`, `modified_count`, `matched_count`, `inserted_id`
+  - Error simulation via `side_effect`
+  - Cursor operations for `find` (with `to_list`)
+
+- **Best Practices**:
+  1. ALWAYS use `mock_mongodb_operations` instead of direct mock setup
+  2. Mock at collection operation level (e.g., "classifications", "find_one")
+  3. Include proper result objects (e.g., deleted_count for delete operations)
+  4. Reference `test_classifications.py` for comprehensive examples
+
+- ## Test Data Management**:
+  1. ALL test data should be in test_data.py
+  2. ALWAYS check test_data.py for existing fixtures first
+  3. Add new fixtures to test_data.py, not in test files
 
 ## Tools & Frameworks
 - **pytest** with **pytest-asyncio** for async tests.
 - **pytest-cov** for coverage (minimum 80%).
 - **httpx** AsyncClient for async HTTP testing.
-- FastAPI’s **TestClient** for synchronous tests.
+- FastAPI's **TestClient** for synchronous tests.
 
 ## FastAPI Testing Guidelines
 - Configure TestClient/AsyncClient with the correct `base_url` and manage lifespan events.
