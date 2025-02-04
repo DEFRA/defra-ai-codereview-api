@@ -64,11 +64,7 @@ async def delete_classification(
 ):
     """Delete a classification."""
     try:
-        if not ensure_object_id(id):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid ObjectId format"
-            )
+        ensure_object_id(id)
             
         success = await service.delete_classification(id)
         if success:
@@ -76,6 +72,12 @@ async def delete_classification(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Classification not found"
+        )
+    except ValueError as e:
+        # Handle ObjectId validation errors from ensure_object_id
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
         )
     except HTTPException:
         raise
