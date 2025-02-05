@@ -84,8 +84,10 @@ async def delete_standard_set(
 ) -> dict:
     """Delete a standard set and all its associated standards."""
     try:
-        if not ensure_object_id(standard_set_id):
-            raise HTTPException(status_code=400, detail="Invalid ObjectId format")
+        try:
+            ensure_object_id(standard_set_id)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
             
         success = await service.delete_standard_set(standard_set_id)
         if not success:

@@ -194,6 +194,187 @@ async def test_create_standard_set_database_error(
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
     assert "Internal server error" in response.json()["detail"]
 
+async def test_create_standard_set_validation_error(
+    async_client,
+    mock_database_setup,
+    mock_collections,
+    valid_standard_set_data
+):
+    # Given: Repository validation error
+    standard_sets_collection, _ = mock_collections
+    standard_sets_collection.find_one = AsyncMock(
+        side_effect=Exception("validation error")
+    )
+    repo = StandardSetRepository(standard_sets_collection)
+    service = StandardSetService(mock_database_setup, repo)
+    app.dependency_overrides[get_standard_set_service] = lambda: service
+
+    # When: POST request is made
+    with patch('src.services.standard_set_service.Process'):
+        response = await async_client.post("/api/v1/standard-sets", json=valid_standard_set_data)
+
+    # Then: Returns 400 with validation error message
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "validation error" in response.json()["detail"]
+
+async def test_create_standard_set_unexpected_error(
+    async_client,
+    mock_database_setup,
+    mock_collections,
+    valid_standard_set_data
+):
+    # Given: Service throws unexpected error
+    standard_sets_collection, _ = mock_collections
+    repo = StandardSetRepository(standard_sets_collection)
+    service = StandardSetService(mock_database_setup, repo)
+    # Mock service to raise generic exception
+    service.create_standard_set = AsyncMock(side_effect=Exception("Unexpected error"))
+    app.dependency_overrides[get_standard_set_service] = lambda: service
+
+    # When: POST request is made
+    with patch('src.services.standard_set_service.Process'):
+        response = await async_client.post("/api/v1/standard-sets", json=valid_standard_set_data)
+
+    # Then: Returns 500 with internal server error message
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert "Internal server error" in response.json()["detail"]
+
+async def test_create_standard_set_find_one_and_replace_returns_none(
+    async_client,
+    mock_database_setup,
+    mock_collections,
+    valid_standard_set_data
+):
+    # Given: find_one_and_replace returns None
+    standard_sets_collection, standards_collection = mock_collections
+    standard_sets_collection.find_one = AsyncMock(return_value=None)
+    standards_collection.delete_many = AsyncMock()
+    standard_sets_collection.find_one_and_replace = AsyncMock(return_value=None)
+    repo = StandardSetRepository(standard_sets_collection)
+    service = StandardSetService(mock_database_setup, repo)
+    app.dependency_overrides[get_standard_set_service] = lambda: service
+
+    # When: POST request is made
+    with patch('src.services.standard_set_service.Process'):
+        response = await async_client.post("/api/v1/standard-sets", json=valid_standard_set_data)
+
+    # Then: Returns 201 with created standard set
+    assert response.status_code == status.HTTP_201_CREATED
+    data = response.json()
+    assert data["name"] == valid_standard_set_data["name"]
+    assert "_id" in data
+    assert "created_at" in data
+    assert "updated_at" in data
+
+async def test_update_standard_set_replace_fails(
+    async_client,
+    mock_database_setup,
+    mock_collections,
+    valid_standard_set_data
+):
+    # Given: replace_one operation fails
+    standard_sets_collection, _ = mock_collections
+    set_id = ObjectId()
+    existing_doc = create_standard_set_test_data(set_id)
+    standard_sets_collection.find_one = AsyncMock(return_value=existing_doc)
+    standard_sets_collection.replace_one = AsyncMock(return_value=AsyncMock(modified_count=0))
+    repo = StandardSetRepository(standard_sets_collection)
+    service = StandardSetService(mock_database_setup, repo)
+    app.dependency_overrides[get_standard_set_service] = lambda: service
+
+    # When: POST request is made to update
+    with patch('src.services.standard_set_service.Process'):
+        response = await async_client.post("/api/v1/standard-sets", json=valid_standard_set_data)
+
+    # Then: Returns 500 with error message
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert "Internal server error" in response.json()["detail"]
+
+async def test_find_by_name_returns_none(
+    async_client,
+    mock_database_setup,
+    mock_collections,
+    valid_standard_set_data
+):
+    # Given: find_one returns None and find_one_and_replace succeeds
+    standard_sets_collection, standards_collection = mock_collections
+    standard_sets_collection.find_one = AsyncMock(return_value=None)
+    standards_collection.delete_many = AsyncMock()
+    set_id = ObjectId()
+    created_doc = create_standard_set_test_data(set_id)
+    standard_sets_collection.find_one_and_replace = AsyncMock(return_value=created_doc)
+    repo = StandardSetRepository(standard_sets_collection)
+    service = StandardSetService(mock_database_setup, repo)
+    app.dependency_overrides[get_standard_set_service] = lambda: service
+
+    # When: POST request is made
+    with patch('src.services.standard_set_service.Process'):
+        response = await async_client.post("/api/v1/standard-sets", json=valid_standard_set_data)
+
+    # Then: Returns 201 with created standard set
+    assert response.status_code == status.HTTP_201_CREATED
+    data = response.json()
+    assert data["name"] == valid_standard_set_data["name"]
+
+async def test_find_by_name_database_error(
+    async_client,
+    mock_database_setup,
+    mock_collections,
+    valid_standard_set_data
+):
+    # Given: find_one operation fails with database error
+    standard_sets_collection, _ = mock_collections
+    standard_sets_collection.find_one = AsyncMock(side_effect=Exception("Database error"))
+    repo = StandardSetRepository(standard_sets_collection)
+    service = StandardSetService(mock_database_setup, repo)
+    app.dependency_overrides[get_standard_set_service] = lambda: service
+
+    # When: POST request is made
+    with patch('src.services.standard_set_service.Process'):
+        response = await async_client.post("/api/v1/standard-sets", json=valid_standard_set_data)
+
+    # Then: Returns 500 with error message
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert "Internal server error" in response.json()["detail"]
+
+async def test_get_by_id_ensure_object_id_returns_none(
+    async_client,
+    mock_database_setup,
+    mock_collections
+):
+    # Given: Invalid ObjectId format
+    set_id = "invalid-id"
+    standard_sets_collection, _ = mock_collections
+    repo = StandardSetRepository(standard_sets_collection)
+    service = StandardSetService(mock_database_setup, repo)
+    app.dependency_overrides[get_standard_set_service] = lambda: service
+
+    # When: GET request is made
+    response = await async_client.get(f"/api/v1/standard-sets/{set_id}")
+
+    # Then: Returns 400 with error message
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "Invalid ObjectId format" in response.json()["detail"]
+
+async def test_delete_ensure_object_id_returns_none(
+    async_client,
+    mock_database_setup,
+    mock_collections
+):
+    # Given: Invalid ObjectId format
+    invalid_id = "invalid-id"
+    standard_sets_collection, _ = mock_collections
+    repo = StandardSetRepository(standard_sets_collection)
+    service = StandardSetService(mock_database_setup, repo)
+    app.dependency_overrides[get_standard_set_service] = lambda: service
+
+    # When: DELETE request is made
+    response = await async_client.delete(f"/api/v1/standard-sets/{invalid_id}")
+
+    # Then: Returns 400 with error message
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "Invalid ObjectId format" in response.json()["detail"]
+
 # Test Cases - Read
 async def test_get_standard_set_by_id_success(
     async_client,
@@ -368,6 +549,50 @@ async def test_get_all_standard_sets_database_error(
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
     assert "Error getting all standard sets: Database error" in response.json()["detail"]
 
+async def test_get_all_standard_sets_repository_error(
+    async_client,
+    mock_database_setup,
+    mock_collections
+):
+    # Given: Repository error in get_all_standard_sets
+    standard_sets_collection, _ = mock_collections
+    mock_cursor = AsyncMock()
+    mock_cursor.to_list = AsyncMock(side_effect=Exception("Repository error"))
+    mock_cursor.sort = MagicMock(return_value=mock_cursor)
+    standard_sets_collection.find = MagicMock(return_value=mock_cursor)
+    repo = StandardSetRepository(standard_sets_collection)
+    service = StandardSetService(mock_database_setup, repo)
+    app.dependency_overrides[get_standard_set_service] = lambda: service
+
+    # When: GET request is made
+    response = await async_client.get("/api/v1/standard-sets")
+
+    # Then: Returns 500 with error message
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert "Repository error" in response.json()["detail"]
+
+async def test_get_standard_sets_unexpected_error(
+    async_client,
+    mock_database_setup,
+    mock_collections
+):
+    # Given: Repository operation fails with unexpected error
+    standard_sets_collection, _ = mock_collections
+    mock_cursor = AsyncMock()
+    mock_cursor.to_list = AsyncMock(side_effect=Exception("Unexpected error"))
+    mock_cursor.sort = MagicMock(return_value=mock_cursor)
+    standard_sets_collection.find = MagicMock(return_value=mock_cursor)
+    repo = StandardSetRepository(standard_sets_collection)
+    service = StandardSetService(mock_database_setup, repo)
+    app.dependency_overrides[get_standard_set_service] = lambda: service
+
+    # When: GET request is made
+    response = await async_client.get("/api/v1/standard-sets")
+
+    # Then: Returns 500 with error message
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert response.json()["detail"] == "Error getting all standard sets: Unexpected error"
+
 # Test Cases - Delete
 async def test_delete_standard_set_success(
     async_client,
@@ -436,4 +661,124 @@ async def test_delete_standard_set_database_error(
 
     # Then: Returns 500 with error message
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-    assert "Failed to delete standard set: Database error" in response.json()["detail"] 
+    assert "Failed to delete standard set: Database error" in response.json()["detail"]
+
+async def test_delete_standard_set_standards_deletion_error(
+    async_client,
+    mock_database_setup,
+    mock_collections
+):
+    # Given: Error during standards deletion
+    set_id = str(ObjectId())
+    standard_sets_collection, standards_collection = mock_collections
+    standard_sets_collection.find_one = AsyncMock(return_value={"_id": ObjectId(set_id)})
+    standards_collection.delete_many = AsyncMock(side_effect=Exception("Standards deletion error"))
+    mock_result = AsyncMock()
+    mock_result.deleted_count = 1
+    standard_sets_collection.delete_one = AsyncMock(return_value=mock_result)
+    repo = StandardSetRepository(standard_sets_collection)
+    service = StandardSetService(mock_database_setup, repo)
+    app.dependency_overrides[get_standard_set_service] = lambda: service
+
+    # When: DELETE request is made
+    response = await async_client.delete(f"/api/v1/standard-sets/{set_id}")
+
+    # Then: Returns 500 with error message
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert "Failed to delete standard set: Standards deletion error" in response.json()["detail"]
+
+async def test_delete_standard_set_invalid_object_id(
+    async_client,
+    mock_database_setup,
+    mock_collections
+):
+    # Given: Invalid ObjectId format
+    invalid_id = "invalid-id"
+    standard_sets_collection, _ = mock_collections
+    repo = StandardSetRepository(standard_sets_collection)
+    service = StandardSetService(mock_database_setup, repo)
+    app.dependency_overrides[get_standard_set_service] = lambda: service
+
+    # When: DELETE request is made with invalid ID
+    response = await async_client.delete(f"/api/v1/standard-sets/{invalid_id}")
+
+    # Then: Returns 400 with invalid format message
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert f"Invalid ObjectId format: {invalid_id}" in response.json()["detail"]
+
+async def test_delete_standard_set_repository_error(
+    async_client,
+    mock_database_setup,
+    mock_collections
+):
+    # Given: Repository error during deletion
+    set_id = str(ObjectId())
+    standard_sets_collection, standards_collection = mock_collections
+    standard_sets_collection.find_one = AsyncMock(return_value={"_id": ObjectId(set_id)})
+    standards_collection.delete_many = AsyncMock()
+    standard_sets_collection.delete_one = AsyncMock(side_effect=Exception("Repository error"))
+    repo = StandardSetRepository(standard_sets_collection)
+    service = StandardSetService(mock_database_setup, repo)
+    app.dependency_overrides[get_standard_set_service] = lambda: service
+
+    # When: DELETE request is made
+    response = await async_client.delete(f"/api/v1/standard-sets/{set_id}")
+
+    # Then: Returns 500 with error message
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert "Repository error" in response.json()["detail"]
+
+async def test_delete_standard_set_unexpected_error(
+    async_client,
+    mock_database_setup,
+    mock_collections
+):
+    # Given: Service throws unexpected error
+    set_id = str(ObjectId())
+    standard_sets_collection, _ = mock_collections
+    repo = StandardSetRepository(standard_sets_collection)
+    service = StandardSetService(mock_database_setup, repo)
+    # Mock service to raise generic exception
+    service.delete_standard_set = AsyncMock(side_effect=Exception("Unexpected error"))
+    app.dependency_overrides[get_standard_set_service] = lambda: service
+
+    # When: DELETE request is made
+    response = await async_client.delete(f"/api/v1/standard-sets/{set_id}")
+
+    # Then: Returns 500 with internal server error message
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert "Internal server error" in response.json()["detail"]
+
+async def test_create_standard_set_standards_deletion_error(
+    async_client,
+    mock_database_setup,
+    mock_collections,
+    valid_standard_set_data
+):
+    # Given: Standards deletion fails during create/update
+    standard_sets_collection, standards_collection = mock_collections
+    existing_doc = create_standard_set_test_data()
+    
+    # Mock find_by_name to return existing doc
+    standard_sets_collection.find_one = AsyncMock(return_value=existing_doc)
+    
+    # Mock standards deletion to fail
+    standards_collection.delete_many = AsyncMock(side_effect=Exception("Standards deletion error"))
+    
+    # Mock replace_one to fail if somehow reached
+    standard_sets_collection.replace_one = AsyncMock(side_effect=Exception("Should not be called"))
+    
+    # Mock find_one_and_replace to fail if somehow reached
+    standard_sets_collection.find_one_and_replace = AsyncMock(side_effect=Exception("Should not be called"))
+    
+    repo = StandardSetRepository(standard_sets_collection)
+    service = StandardSetService(mock_database_setup, repo)
+    app.dependency_overrides[get_standard_set_service] = lambda: service
+
+    # When: POST request is made
+    with patch('src.services.standard_set_service.Process'):
+        response = await async_client.post("/api/v1/standard-sets", json=valid_standard_set_data)
+
+    # Then: Returns 500 with error message
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert "Internal server error" in response.json()["detail"] 
