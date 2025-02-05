@@ -70,17 +70,17 @@ def setup_mock_result(operation_type="insert", count=1, doc_id=None):
         count (int): Number of affected documents for update/delete operations
         doc_id (ObjectId, optional): Document ID for insert operations
     """
-    mock_result = AsyncMock()
+    class MockResult:
+        def __init__(self):
+            if operation_type == "insert":
+                self.inserted_id = doc_id or ObjectId()
+            elif operation_type == "update":
+                self.modified_count = count
+                self.matched_count = count
+            elif operation_type == "delete":
+                self.deleted_count = count
     
-    if operation_type == "insert":
-        mock_result.inserted_id = doc_id or ObjectId()
-    elif operation_type == "update":
-        mock_result.modified_count = count
-        mock_result.matched_count = count
-    elif operation_type == "delete":
-        mock_result.deleted_count = count
-    
-    return mock_result
+    return MockResult()
 
 @pytest.fixture
 def setup_error_mock(error_message="Database error"):
