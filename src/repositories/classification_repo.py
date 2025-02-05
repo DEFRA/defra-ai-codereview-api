@@ -86,28 +86,6 @@ class ClassificationRepository:
             logger.error(f"Error deleting classification: {str(e)}")
             raise
 
-    async def update(self, id: str, classification: ClassificationCreate) -> Optional[Classification]:
-        """Update a classification."""
-        try:
-            object_id = ensure_object_id(id)
-            if not object_id:
-                return None
-                
-            update_data = classification.model_dump()
-            update_data["updated_at"] = datetime.now(UTC)
-            
-            result = await self.collection.update_one(
-                {"_id": object_id},
-                {"$set": update_data}
-            )
-            
-            if result.modified_count > 0:
-                return await self.get_by_id(id)
-            return None
-        except Exception as e:
-            logger.error(f"Error updating classification: {str(e)}")
-            return None
-
     async def get_by_name(self, name: str) -> Optional[Classification]:
         """Get a classification by name."""
         try:
@@ -118,4 +96,4 @@ class ClassificationRepository:
             return None
         except Exception as e:
             logger.error(f"Error getting classification by name: {str(e)}")
-            return None 
+            raise 

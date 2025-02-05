@@ -162,6 +162,40 @@ async def test_create_classification_duplicate(
     assert datetime.fromisoformat(data["created_at"].replace('Z', '+00:00')) == existing_doc["created_at"]
     assert datetime.fromisoformat(data["updated_at"].replace('Z', '+00:00')) == existing_doc["updated_at"]
 
+async def test_create_classification_invalid_input(
+    async_client,
+    setup_service
+):
+    """Test classification creation with invalid input."""
+    # Given: Invalid classification data
+    invalid_data = {"invalid_field": "test"}
+    
+    # When: POST request is made with invalid data
+    response = await async_client.post(
+        "/api/v1/classifications",
+        json=invalid_data
+    )
+    
+    # Then: Returns 422 validation error
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+async def test_create_classification_empty_name(
+    async_client,
+    setup_service
+):
+    """Test classification creation with empty name."""
+    # Given: Classification data with empty name
+    invalid_data = {"name": ""}
+    
+    # When: POST request is made with empty name
+    response = await async_client.post(
+        "/api/v1/classifications",
+        json=invalid_data
+    )
+    
+    # Then: Returns 422 validation error
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
 # Test Cases - List
 async def test_list_classifications_success(
     async_client,
@@ -211,6 +245,30 @@ async def test_list_classifications_failure(
     # Then: Returns 500 with error message
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
     assert "Failed to retrieve classifications" in response.json()["detail"]
+
+async def test_list_classifications_empty(
+    async_client,
+    mock_database_setup,
+    mock_collections
+):
+    """Test listing classifications when none exist."""
+    # Given: Empty database
+    classifications_collection = mock_collections
+    mock_cursor = AsyncMock()
+    mock_cursor.to_list = AsyncMock(return_value=[])
+    classifications_collection.find = MagicMock(return_value=mock_cursor)
+    repo = ClassificationRepository(classifications_collection)
+    service = ClassificationService(mock_database_setup, repo)
+    app.dependency_overrides[get_classification_service] = lambda: service
+    
+    # When: GET request is made
+    response = await async_client.get("/api/v1/classifications")
+    
+    # Then: Returns 200 with empty list
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 0
 
 # Test Cases - Delete
 async def test_delete_classification_success(
@@ -295,6 +353,135 @@ async def test_delete_classification_server_error(
     
     # When: DELETE request is made
     response = await async_client.delete(f"/api/v1/classifications/{valid_id}")
+    
+    # Then: Returns 500 with error message
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert "Failed to delete classification" in response.json()["detail"]
+
+async def test_delete_classification_db_error(
+    async_client,
+    mock_database_setup,
+    mock_collections
+):
+    """Test delete classification with database error before delete."""
+    # Given: Valid ID but database find_one fails
+    classification_id = str(ObjectId())
+    classifications_collection = mock_collections
+    classifications_collection.find_one = AsyncMock(side_effect=Exception("Database error"))
+    repo = ClassificationRepository(classifications_collection)
+    service = ClassificationService(mock_database_setup, repo)
+    app.dependency_overrides[get_classification_service] = lambda: service
+    
+    # When: DELETE request is made
+    response = await async_client.delete(f"/api/v1/classifications/{classification_id}")
+    
+    # Then: Returns 500 with error message
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert "Failed to delete classification" in response.json()["detail"]
+
+async def test_delete_classification_empty_id(
+    async_client,
+    mock_database_setup,
+    mock_collections
+):
+    """Test delete classification with empty ID."""
+    # Given: Empty classification ID
+    classifications_collection = mock_collections
+    repo = ClassificationRepository(classifications_collection)
+    service = ClassificationService(mock_database_setup, repo)
+    app.dependency_overrides[get_classification_service] = lambda: service
+    
+    # When: DELETE request is made with empty ID
+    response = await async_client.delete("/api/v1/classifications/ ")  # Space in path parameter
+    
+    # Then: Returns 400 bad request (invalid ObjectId)
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "Invalid ObjectId format" in response.json()["detail"]
+
+async def test_get_classification_by_name_not_found(
+    async_client,
+    mock_database_setup,
+    mock_collections
+):
+    """Test get classification by name when it doesn't exist."""
+    # Given: Non-existent classification name
+    classifications_collection = mock_collections
+    classifications_collection.find_one = AsyncMock(return_value=None)
+    repo = ClassificationRepository(classifications_collection)
+    service = ClassificationService(mock_database_setup, repo)
+    app.dependency_overrides[get_classification_service] = lambda: service
+    
+    # When: POST request is made with non-existent name
+    response = await async_client.post(
+        "/api/v1/classifications",
+        json={"name": "non-existent"}
+    )
+    
+    # Then: Returns 201 with new classification
+    assert response.status_code == status.HTTP_201_CREATED
+    data = response.json()
+    assert data["name"] == "non-existent"
+
+async def test_get_classification_by_name_db_error(
+    async_client,
+    mock_database_setup,
+    mock_collections
+):
+    """Test get classification by name when database errors."""
+    # Given: Database error when checking name
+    classifications_collection = mock_collections
+    classifications_collection.find_one = AsyncMock(side_effect=Exception("Database error"))
+    repo = ClassificationRepository(classifications_collection)
+    service = ClassificationService(mock_database_setup, repo)
+    app.dependency_overrides[get_classification_service] = lambda: service
+    
+    # When: POST request is made
+    response = await async_client.post(
+        "/api/v1/classifications",
+        json={"name": "test"}
+    )
+    
+    # Then: Returns 400 with error message
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "Database error" in response.json()["detail"]
+
+async def test_get_classification_by_id_not_found(
+    async_client,
+    mock_database_setup,
+    mock_collections
+):
+    """Test get classification by ID when it doesn't exist."""
+    # Given: Non-existent classification ID
+    classification_id = str(ObjectId())
+    classifications_collection = mock_collections
+    classifications_collection.find_one = AsyncMock(return_value=None)
+    repo = ClassificationRepository(classifications_collection)
+    service = ClassificationService(mock_database_setup, repo)
+    app.dependency_overrides[get_classification_service] = lambda: service
+    
+    # When: DELETE request is made
+    response = await async_client.delete(f"/api/v1/classifications/{classification_id}")
+    
+    # Then: Returns 404 not found
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert "Classification not found" in response.json()["detail"]
+
+async def test_get_classification_by_id_db_error(
+    async_client,
+    mock_database_setup,
+    mock_collections
+):
+    """Test get classification by ID when database errors."""
+    # Given: Database error when checking ID
+    classification_id = str(ObjectId())
+    classifications_collection = mock_collections
+    classifications_collection.find_one = AsyncMock(side_effect=Exception("Database error"))
+    repo = ClassificationRepository(classifications_collection)
+    service = ClassificationService(mock_database_setup, repo)
+    app.dependency_overrides[get_classification_service] = lambda: service
+    
+    # When: DELETE request is made
+    response = await async_client.delete(f"/api/v1/classifications/{classification_id}")
     
     # Then: Returns 500 with error message
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
