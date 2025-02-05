@@ -18,6 +18,7 @@ from src.services.standard_set_service import StandardSetService
 from src.repositories.standard_set_repo import StandardSetRepository
 from src.main import app
 
+# Test Setup and Fixtures
 @pytest.fixture(autouse=True)
 async def setup_and_teardown():
     """Setup and teardown for each test."""
@@ -39,22 +40,70 @@ async def mock_collections():
     
     return standard_sets_collection, standards_collection
 
+@pytest.fixture
+def setup_service(mock_database_setup, mock_collections):
+    """Helper fixture to setup service with mocked dependencies."""
+    standard_sets_collection, standards_collection = mock_collections
+    mock_database_setup.standard_sets = standard_sets_collection
+    mock_database_setup.standards = standards_collection
+    
+    repo = StandardSetRepository(standard_sets_collection)
+    service = StandardSetService(mock_database_setup, repo)
+    app.dependency_overrides[get_standard_set_service] = lambda: service
+    
+    return service, standard_sets_collection, standards_collection
+
+@pytest.fixture
+def setup_list_cursor(mock_docs=None):
+    """Helper fixture to setup cursor for list operations."""
+    mock_cursor = AsyncMock()
+    mock_cursor.to_list = AsyncMock(return_value=mock_docs or [])
+    mock_cursor.sort = MagicMock(return_value=mock_cursor)
+    return mock_cursor
+
+@pytest.fixture
+def setup_mock_result(operation_type="insert", count=1, doc_id=None):
+    """Helper fixture to setup mock results for database operations.
+    
+    Args:
+        operation_type (str): Type of operation ('insert', 'update', 'delete')
+        count (int): Number of affected documents for update/delete operations
+        doc_id (ObjectId, optional): Document ID for insert operations
+    """
+    mock_result = AsyncMock()
+    
+    if operation_type == "insert":
+        mock_result.inserted_id = doc_id or ObjectId()
+    elif operation_type == "update":
+        mock_result.modified_count = count
+        mock_result.matched_count = count
+    elif operation_type == "delete":
+        mock_result.deleted_count = count
+    
+    return mock_result
+
+@pytest.fixture
+def setup_error_mock(error_message="Database error"):
+    """Helper fixture to setup error mocks for database operations.
+    
+    Args:
+        error_message (str): Custom error message for the exception
+    """
+    return AsyncMock(side_effect=Exception(error_message))
+
 # Test Cases - Create
 async def test_create_standard_set_success(
     async_client,
-    mock_database_setup,
-    mock_collections,
+    setup_service,
+    setup_mock_result,
     valid_standard_set_data
 ):
     # Given: Valid standard set data
-    standard_sets_collection, standards_collection = mock_collections
+    _, standard_sets_collection, standards_collection = setup_service
     standard_sets_collection.find_one = AsyncMock(return_value=None)
     standards_collection.delete_many = AsyncMock()
     created_doc = create_standard_set_test_data()
     standard_sets_collection.find_one_and_replace = AsyncMock(return_value=created_doc)
-    repo = StandardSetRepository(standard_sets_collection)
-    service = StandardSetService(mock_database_setup, repo)
-    app.dependency_overrides[get_standard_set_service] = lambda: service
 
     # When: POST request is made with valid data
     with patch('src.services.standard_set_service.Process'):

@@ -16,6 +16,7 @@ from src.services.classification_service import ClassificationService
 from src.repositories.classification_repo import ClassificationRepository
 from src.main import app
 
+# Test Setup and Fixtures
 @pytest.fixture(autouse=True)
 async def setup_and_teardown():
     """Setup and teardown for each test."""
@@ -35,20 +36,69 @@ async def mock_collections():
     
     return classifications_collection
 
-# Test Cases - Create
-async def test_create_classification_success(
-    async_client,
-    mock_database_setup,
-    mock_collections,
-    valid_classification_data
-):
-    # Given: A valid classification payload
+@pytest.fixture
+def setup_service(mock_database_setup, mock_collections):
+    """Helper fixture to setup service with mocked dependencies."""
     classifications_collection = mock_collections
-    classifications_collection.find_one = AsyncMock(return_value=None)
-    classifications_collection.insert_one = AsyncMock()
+    mock_database_setup.classifications = classifications_collection
+    
     repo = ClassificationRepository(classifications_collection)
     service = ClassificationService(mock_database_setup, repo)
     app.dependency_overrides[get_classification_service] = lambda: service
+    
+    return service, classifications_collection
+
+@pytest.fixture
+def setup_list_cursor(mock_docs=None):
+    """Helper fixture to setup cursor for list operations."""
+    mock_cursor = AsyncMock()
+    mock_cursor.to_list = AsyncMock(return_value=mock_docs or [])
+    mock_cursor.sort = MagicMock(return_value=mock_cursor)
+    return mock_cursor
+
+@pytest.fixture
+def setup_mock_result(operation_type="insert", count=1, doc_id=None):
+    """Helper fixture to setup mock results for database operations.
+    
+    Args:
+        operation_type (str): Type of operation ('insert', 'update', 'delete')
+        count (int): Number of affected documents for update/delete operations
+        doc_id (ObjectId, optional): Document ID for insert operations
+    """
+    mock_result = AsyncMock()
+    
+    if operation_type == "insert":
+        mock_result.inserted_id = doc_id or ObjectId()
+    elif operation_type == "update":
+        mock_result.modified_count = count
+        mock_result.matched_count = count
+    elif operation_type == "delete":
+        mock_result.deleted_count = count
+    
+    return mock_result
+
+@pytest.fixture
+def setup_error_mock(error_message="Database error"):
+    """Helper fixture to setup error mocks for database operations.
+    
+    Args:
+        error_message (str): Custom error message for the exception
+    """
+    return AsyncMock(side_effect=Exception(error_message))
+
+# Test Cases - Create
+async def test_create_classification_success(
+    async_client,
+    setup_service,
+    setup_mock_result,
+    valid_classification_data
+):
+    """Test successful creation of a classification."""
+    # Given: A valid classification payload
+    _, classifications_collection = setup_service
+    classifications_collection.find_one = AsyncMock(return_value=None)
+    mock_result = setup_mock_result("insert")
+    classifications_collection.insert_one = AsyncMock(return_value=mock_result)
     
     # When: POST request is made
     response = await async_client.post(
@@ -64,19 +114,15 @@ async def test_create_classification_success(
 
 async def test_create_classification_failure(
     async_client,
-    mock_database_setup,
-    mock_collections,
+    setup_service,
+    setup_error_mock,
     valid_classification_data
 ):
+    """Test classification creation with database error."""
     # Given: Database operation fails
-    classifications_collection = mock_collections
+    _, classifications_collection = setup_service
     classifications_collection.find_one = AsyncMock(return_value=None)
-    classifications_collection.insert_one = AsyncMock(
-        side_effect=Exception("Database error")
-    )
-    repo = ClassificationRepository(classifications_collection)
-    service = ClassificationService(mock_database_setup, repo)
-    app.dependency_overrides[get_classification_service] = lambda: service
+    classifications_collection.insert_one = setup_error_mock
     
     # When: POST request is made
     response = await async_client.post(
