@@ -6,7 +6,7 @@ import pytest
 from fastapi import status
 from bson import ObjectId
 from datetime import UTC
-from unittest.mock import AsyncMock, MagicMock, PropertyMock
+from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 from tests.utils.test_data import (
     create_standard_set_test_data,
     create_standard_test_data,
@@ -57,7 +57,8 @@ async def test_create_standard_set_success(
     app.dependency_overrides[get_standard_set_service] = lambda: service
 
     # When: POST request is made with valid data
-    response = await async_client.post("/api/v1/standard-sets", json=valid_standard_set_data)
+    with patch('src.services.standard_set_service.Process'):
+        response = await async_client.post("/api/v1/standard-sets", json=valid_standard_set_data)
 
     # Then: Returns 201 with created standard set
     assert response.status_code == status.HTTP_201_CREATED
@@ -88,7 +89,8 @@ async def test_create_standard_set_update_existing(
     app.dependency_overrides[get_standard_set_service] = lambda: service
 
     # When: POST request is made with existing name
-    response = await async_client.post("/api/v1/standard-sets", json=valid_standard_set_data)
+    with patch('src.services.standard_set_service.Process'):
+        response = await async_client.post("/api/v1/standard-sets", json=valid_standard_set_data)
 
     # Then: Returns 201 with updated standard set
     assert response.status_code == status.HTTP_201_CREATED
@@ -112,7 +114,8 @@ async def test_create_standard_set_invalid_data(
     app.dependency_overrides[get_standard_set_service] = lambda: service
 
     # When: POST request is made with invalid data
-    response = await async_client.post("/api/v1/standard-sets", json=invalid_standard_set_data)
+    with patch('src.services.standard_set_service.Process'):
+        response = await async_client.post("/api/v1/standard-sets", json=invalid_standard_set_data)
 
     # Then: Returns 422 validation error
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
@@ -135,7 +138,8 @@ async def test_create_standard_set_database_error(
     app.dependency_overrides[get_standard_set_service] = lambda: service
 
     # When: POST request is made
-    response = await async_client.post("/api/v1/standard-sets", json=valid_standard_set_data)
+    with patch('src.services.standard_set_service.Process'):
+        response = await async_client.post("/api/v1/standard-sets", json=valid_standard_set_data)
 
     # Then: Returns 500 with error message
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
