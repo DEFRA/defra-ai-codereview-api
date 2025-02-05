@@ -6,18 +6,49 @@ import pytest
 from fastapi import status
 from bson import ObjectId
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock
-from tests.utils.test_data import valid_classification_data, create_db_document
+from unittest.mock import AsyncMock, MagicMock, PropertyMock
+from tests.utils.test_data import (
+    valid_classification_data,
+    create_classification_test_data
+)
+from src.api.dependencies import get_classification_service
+from src.services.classification_service import ClassificationService
+from src.repositories.classification_repo import ClassificationRepository
+from src.main import app
+
+@pytest.fixture(autouse=True)
+async def setup_and_teardown():
+    """Setup and teardown for each test."""
+    # Setup
+    yield
+    # Teardown
+    app.dependency_overrides = {}
+
+@pytest.fixture
+async def mock_collections():
+    """Setup mock collections for tests."""
+    classifications_collection = AsyncMock()
+    
+    # Mock the database property
+    mock_db = AsyncMock()
+    type(classifications_collection).database = PropertyMock(return_value=mock_db)
+    
+    return classifications_collection
 
 # Test Cases - Create
 async def test_create_classification_success(
     async_client,
     mock_database_setup,
+    mock_collections,
     valid_classification_data
 ):
     # Given: A valid classification payload
-    mock_database_setup.classifications.find_one = AsyncMock(return_value=None)
-    mock_database_setup.classifications.insert_one = AsyncMock()
+    classifications_collection = mock_collections
+    classifications_collection.find_one = AsyncMock(return_value=None)
+    classifications_collection.insert_one = AsyncMock()
+    repo = ClassificationRepository(classifications_collection)
+    service = ClassificationService(mock_database_setup, repo)
+    app.dependency_overrides[get_classification_service] = lambda: service
     
     # When: POST request is made
     response = await async_client.post(
@@ -34,13 +65,18 @@ async def test_create_classification_success(
 async def test_create_classification_failure(
     async_client,
     mock_database_setup,
+    mock_collections,
     valid_classification_data
 ):
     # Given: Database operation fails
-    # First mock find_one (get_by_name check) to return None
-    mock_database_setup.classifications.find_one = AsyncMock(return_value=None)
-    # Then mock insert_one to raise an exception
-    mock_database_setup.classifications.insert_one = AsyncMock(side_effect=Exception("Database error"))
+    classifications_collection = mock_collections
+    classifications_collection.find_one = AsyncMock(return_value=None)
+    classifications_collection.insert_one = AsyncMock(
+        side_effect=Exception("Database error")
+    )
+    repo = ClassificationRepository(classifications_collection)
+    service = ClassificationService(mock_database_setup, repo)
+    app.dependency_overrides[get_classification_service] = lambda: service
     
     # When: POST request is made
     response = await async_client.post(
@@ -55,11 +91,16 @@ async def test_create_classification_failure(
 async def test_create_classification_duplicate(
     async_client,
     mock_database_setup,
+    mock_collections,
     valid_classification_data
 ):
     # Given: Classification already exists
-    existing_doc = create_db_document(**valid_classification_data)
-    mock_database_setup.classifications.find_one = AsyncMock(return_value=existing_doc)
+    classifications_collection = mock_collections
+    existing_doc = create_classification_test_data(valid_classification_data["name"])
+    classifications_collection.find_one = AsyncMock(return_value=existing_doc)
+    repo = ClassificationRepository(classifications_collection)
+    service = ClassificationService(mock_database_setup, repo)
+    app.dependency_overrides[get_classification_service] = lambda: service
     
     # When: POST request is made with same name
     response = await async_client.post(
@@ -80,13 +121,18 @@ async def test_create_classification_duplicate(
 async def test_list_classifications_success(
     async_client,
     mock_database_setup,
+    mock_collections,
     valid_classification_data
 ):
     # Given: Existing classifications in the database
-    mock_doc = create_db_document(**valid_classification_data)
+    classifications_collection = mock_collections
+    mock_doc = create_classification_test_data(valid_classification_data["name"])
     mock_cursor = AsyncMock()
     mock_cursor.to_list = AsyncMock(return_value=[mock_doc])
-    mock_database_setup.classifications.find = MagicMock(return_value=mock_cursor)
+    classifications_collection.find = MagicMock(return_value=mock_cursor)
+    repo = ClassificationRepository(classifications_collection)
+    service = ClassificationService(mock_database_setup, repo)
+    app.dependency_overrides[get_classification_service] = lambda: service
     
     # When: GET request is made
     response = await async_client.get("/api/v1/classifications")
@@ -102,12 +148,17 @@ async def test_list_classifications_success(
 
 async def test_list_classifications_failure(
     async_client,
-    mock_database_setup
+    mock_database_setup,
+    mock_collections
 ):
     # Given: Database operation fails
+    classifications_collection = mock_collections
     mock_cursor = AsyncMock()
     mock_cursor.to_list = AsyncMock(side_effect=Exception("Database error"))
-    mock_database_setup.classifications.find = MagicMock(return_value=mock_cursor)
+    classifications_collection.find = MagicMock(return_value=mock_cursor)
+    repo = ClassificationRepository(classifications_collection)
+    service = ClassificationService(mock_database_setup, repo)
+    app.dependency_overrides[get_classification_service] = lambda: service
     
     # When: GET request is made
     response = await async_client.get("/api/v1/classifications")
@@ -119,13 +170,18 @@ async def test_list_classifications_failure(
 # Test Cases - Delete
 async def test_delete_classification_success(
     async_client,
-    mock_database_setup
+    mock_database_setup,
+    mock_collections
 ):
     # Given: Valid classification ID
     classification_id = str(ObjectId())
+    classifications_collection = mock_collections
     mock_result = AsyncMock()
     mock_result.deleted_count = 1
-    mock_database_setup.classifications.delete_one = AsyncMock(return_value=mock_result)
+    classifications_collection.delete_one = AsyncMock(return_value=mock_result)
+    repo = ClassificationRepository(classifications_collection)
+    service = ClassificationService(mock_database_setup, repo)
+    app.dependency_overrides[get_classification_service] = lambda: service
     
     # When: DELETE request is made
     response = await async_client.delete(f"/api/v1/classifications/{classification_id}")
@@ -136,13 +192,18 @@ async def test_delete_classification_success(
 
 async def test_delete_classification_not_found(
     async_client,
-    mock_database_setup
+    mock_database_setup,
+    mock_collections
 ):
     # Given: Non-existent classification ID
     classification_id = str(ObjectId())
+    classifications_collection = mock_collections
     mock_result = AsyncMock()
     mock_result.deleted_count = 0
-    mock_database_setup.classifications.delete_one = AsyncMock(return_value=mock_result)
+    classifications_collection.delete_one = AsyncMock(return_value=mock_result)
+    repo = ClassificationRepository(classifications_collection)
+    service = ClassificationService(mock_database_setup, repo)
+    app.dependency_overrides[get_classification_service] = lambda: service
     
     # When: DELETE request is made
     response = await async_client.delete(f"/api/v1/classifications/{classification_id}")
@@ -153,10 +214,15 @@ async def test_delete_classification_not_found(
 
 async def test_delete_classification_invalid_id(
     async_client,
-    mock_database_setup
+    mock_database_setup,
+    mock_collections
 ):
     # Given: Invalid ObjectId format
     invalid_id = "invalid-id"
+    classifications_collection = mock_collections
+    repo = ClassificationRepository(classifications_collection)
+    service = ClassificationService(mock_database_setup, repo)
+    app.dependency_overrides[get_classification_service] = lambda: service
     
     # When: DELETE request is made
     response = await async_client.delete(f"/api/v1/classifications/{invalid_id}")
@@ -169,11 +235,18 @@ async def test_delete_classification_invalid_id(
 
 async def test_delete_classification_server_error(
     async_client,
-    mock_database_setup
+    mock_database_setup,
+    mock_collections
 ):
     # Given: Database operation throws unexpected error
     valid_id = str(ObjectId())
-    mock_database_setup.classifications.delete_one = AsyncMock(side_effect=Exception("Unexpected database error"))
+    classifications_collection = mock_collections
+    classifications_collection.delete_one = AsyncMock(
+        side_effect=Exception("Unexpected database error")
+    )
+    repo = ClassificationRepository(classifications_collection)
+    service = ClassificationService(mock_database_setup, repo)
+    app.dependency_overrides[get_classification_service] = lambda: service
     
     # When: DELETE request is made
     response = await async_client.delete(f"/api/v1/classifications/{valid_id}")

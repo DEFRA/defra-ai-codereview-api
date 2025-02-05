@@ -3,55 +3,51 @@ import pytest
 from datetime import datetime, UTC
 from bson import ObjectId
 
-@pytest.fixture
-def valid_classification_data():
-    """Create valid classification test data."""
-    return {
-        "name": "Test Classification"
-    }
+def create_classification_test_data(name: str = "Test Classification") -> dict:
+    """Create a classification test document with default values.
+    
+    Args:
+        name: Optional name for the classification. Defaults to "Test Classification"
+        
+    Returns:
+        dict: Classification document with default test values
+    """
+    return create_db_document(
+        name=name
+    )
 
-@pytest.fixture
-def valid_code_review_data():
-    """Create valid code review test data."""
-    return {
-        "title": "Test Code Review",
-        "description": "Test Description",
-        "repository_url": "https://github.com/test/repo",
-        "branch": "main",
-        "pull_request_url": "https://github.com/test/repo/pull/1"
-    }
+def create_standard_set_test_data(set_id: ObjectId = None) -> dict:
+    """Create a standard set test document with default values.
+    
+    Args:
+        set_id: Optional ObjectId for the standard set. If not provided, a new one is created.
+        
+    Returns:
+        dict: Standard set document with default test values
+    """
+    return create_db_document(
+        _id=set_id or ObjectId(),
+        name="Test Standard Set",
+        repository_url="https://github.com/test/repo",
+        custom_prompt="Test prompt"
+    )
 
-@pytest.fixture
-def standard_set_data():
-    """Test data for standard set creation."""
-    return {
-        "name": "Test Standards",
-        "repository_url": "https://github.com/org/test-standards",
-        "custom_prompt": "Test prompt for standards analysis"
-    }
-
-@pytest.fixture
-def standard_set_with_standards():
-    """Test data for standard set with standards."""
-    return {
-        "_id": str(ObjectId()),
-        "name": "Test Standards",
-        "repository_url": "https://github.com/org/test-standards",
-        "custom_prompt": "Test prompt for standards analysis",
-        "created_at": datetime.now(UTC).isoformat(),
-        "updated_at": datetime.now(UTC).isoformat(),
-        "standards": [
-            {
-                "_id": str(ObjectId()),
-                "title": "Test Standard 1",
-                "description": "Test description 1",
-                "category": "security",
-                "severity": "high",
-                "created_at": datetime.now(UTC).isoformat(),
-                "updated_at": datetime.now(UTC).isoformat()
-            }
-        ]
-    }
+def create_standard_test_data(set_id: ObjectId, index: int = 0) -> dict:
+    """Create a standard test document with default values.
+    
+    Args:
+        set_id: ObjectId of the parent standard set
+        index: Optional index to create unique standards
+        
+    Returns:
+        dict: Standard document with default test values
+    """
+    return create_db_document(
+        text=f"Standard {index}",
+        repository_path=f"/path/to/standard_{index}",
+        standard_set_id=set_id,
+        classification_ids=[ObjectId(), ObjectId()]
+    )
 
 def create_db_document(**kwargs) -> dict:
     """Create a database document with common fields.
@@ -63,8 +59,15 @@ def create_db_document(**kwargs) -> dict:
         dict: Document with _id and timestamps
     """
     return {
-        "_id": ObjectId(),
+        "_id": kwargs.pop("_id", ObjectId()),
         "created_at": datetime.now(UTC),
         "updated_at": datetime.now(UTC),
         **kwargs
+    }
+
+@pytest.fixture
+def valid_classification_data():
+    """Create valid classification test data for input validation."""
+    return {
+        "name": "Test Classification"
     } 

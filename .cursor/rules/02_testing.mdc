@@ -16,7 +16,7 @@ globs: test_*.py
 - **Error Cases**: Cover invalid input (400), resource not found (404), server errors (500) and dependency failures e.g. database failures
 
 ## Best Practices
-- **Organisation**: Group tests by endpoint or operation.
+- **Organisation**: Group tests by endpoint or operation with clear comment headers (e.g. "# Test Cases - Create").
 - **Naming**: Use descriptive test names (e.g. `test_operation_scenario_expected`).
 - **Fixtures**: Use fixtures for common test data and mocks.
 - **Assertions**: Validate status codes first, then response bodies.
@@ -26,8 +26,40 @@ globs: test_*.py
   - Review conftest.py for established mocking approaches
   - Reuse existing test data from test_data.py
 
+## Test File Structure
+Each test file should follow this structure:
+1. File docstring explaining purpose
+2. Imports (stdlib, third-party, local)
+3. Setup fixtures (autouse and specific)
+4. Test cases grouped by operation
+5. Helper functions (if needed)
+
 ## Database Mocking Approach
 We use direct collection mocking for all database operations. This provides clearer and more maintainable tests.
+
+### Collection Mocking Pattern
+Use a fixture to set up collection mocks:
+```python
+@pytest.fixture
+async def mock_collections():
+    """Setup mock collections for tests."""
+    collection = AsyncMock()
+    
+    # Mock the database property for nested collections
+    mock_db = AsyncMock()
+    type(collection).database = PropertyMock(return_value=mock_db)
+    
+    return collection
+```
+
+### Service Setup Pattern
+Each test should set up its service with mocked dependencies:
+```python
+# Setup repository and service
+repo = Repository(collection)
+service = Service(mock_database_setup, repo)
+app.dependency_overrides[get_service] = lambda: service
+```
 
 ### Collection Operation Mocking
 Mock MongoDB operations directly on the collection object:
@@ -62,12 +94,34 @@ collection.operation = AsyncMock(side_effect=Exception("Database error"))
 1. ALL test data should be in test_data.py
 2. Use `create_db_document` for generating test documents
 3. Include all required fields, timestamps, and ObjectId
-4. Example:
+4. Provide helper functions for each document type (e.g. `create_classification_test_data`)
+5. Use fixtures for input data validation (e.g. `valid_classification_data`)
+
+## Test Structure Pattern
+Each test should follow this structure:
 ```python
-mock_doc = create_db_document(
-    name="Test Classification",
-    # Add other required fields
-)
+async def test_operation_scenario_expected(
+    async_client,
+    mock_database_setup,
+    mock_collections,
+    test_data_fixtures
+):
+    # Given: Setup context with clear comments
+    collection = mock_collections
+    # Setup mocks...
+    
+    # Setup repository and service
+    repo = Repository(collection)
+    service = Service(mock_database_setup, repo)
+    app.dependency_overrides[get_service] = lambda: service
+    
+    # When: Action is performed
+    response = await async_client...
+    
+    # Then: Verify results
+    assert response.status_code == status.HTTP_XXX_XXX
+    data = response.json()
+    assert ... # Additional assertions
 ```
 
 ## Tools & Frameworks
@@ -80,6 +134,7 @@ mock_doc = create_db_document(
 - Configure TestClient/AsyncClient with the correct `base_url` and manage lifespan events.
 - Override dependency providers (not the implementations) and reset overrides between tests.
 - Validate responses against both status codes and Pydantic models.
+- Use proper async/await patterns throughout tests.
 
 ## Test Directory Structure
 ```bash
@@ -87,5 +142,5 @@ tests/
 ├── conftest.py   # Fixtures and configuration
 ├── integration/  # Integration tests
 ├── unit/        # Unit tests   
-└── utils/       # Utility functions
+└── utils/       # Utility functions and test data
 ``` 
