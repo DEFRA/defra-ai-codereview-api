@@ -1,7 +1,12 @@
 """Code review API endpoints."""
 from fastapi import APIRouter, HTTPException, status, Depends
-from typing import List
-from src.models.code_review import CodeReview, CodeReviewCreate, CodeReviewList
+from typing import List, Optional
+from src.models.code_review import (
+    CodeReview,
+    CodeReviewCreate,
+    CodeReviewList,
+    ReviewStatus
+)
 from src.utils.logging_utils import setup_logger
 from src.services.code_review_service import CodeReviewService
 from src.api.dependencies import get_code_review_service
@@ -43,14 +48,21 @@ async def create_code_review(
         response_model=List[CodeReviewList],
         description="Get all code reviews",
         responses={
-            200: {"description": "List of all code reviews"}
+            200: {"description": "List of all code reviews"},
+            422: {"description": "Invalid status value"}
         })
 async def get_code_reviews(
+    status: Optional[ReviewStatus] = None,
     service: CodeReviewService = Depends(get_code_review_service)
 ):
-    """Get all code reviews."""
+    """Get all code reviews.
+    
+    Args:
+        status: Optional filter by review status
+        service: Code review service dependency
+    """
     try:
-        return await service.get_all_reviews()
+        return await service.get_all_reviews(status=status)
     except Exception as e:
         logger.error(f"Error fetching code reviews: {str(e)}")
         raise HTTPException(

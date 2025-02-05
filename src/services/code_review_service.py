@@ -1,5 +1,5 @@
 """Service layer for code review operations."""
-from typing import List
+from typing import List, Optional
 import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from bson import ObjectId
@@ -138,9 +138,13 @@ class CodeReviewService:
 
         return created_review
 
-    async def get_all_reviews(self) -> List[CodeReviewList]:
-        """Get all code reviews."""
-        return await self.repo.get_all()
+    async def get_all_reviews(self, status: Optional[ReviewStatus] = None) -> List[CodeReviewList]:
+        """Get all code reviews.
+        
+        Args:
+            status: Optional filter by review status
+        """
+        return await self.repo.get_all(status=status)
 
     async def get_review_by_id(self, review_id: str) -> CodeReview:
         """Get a specific code review."""

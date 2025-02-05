@@ -19,6 +19,7 @@ from tests.utils.test_data import (
     invalid_code_review_data,
     create_standard_set_reference
 )
+from datetime import datetime
 
 # Test Setup and Fixtures
 @pytest.fixture(autouse=True)
@@ -348,4 +349,239 @@ async def test_get_all_code_reviews_db_error(
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
     data = response.json()
     assert "Error fetching code reviews" in data["detail"]
-    assert "Database error" in data["detail"] 
+    assert "Database error" in data["detail"]
+
+# Additional Test Cases - Create Code Review
+async def test_create_code_review_multiple_standard_sets(
+    async_client,
+    setup_service,
+    setup_mock_result,
+    valid_code_review_data
+):
+    """Test creating a code review with multiple standard sets."""
+    # Given: Valid code review data with multiple standard sets
+    _, code_reviews_collection, standard_sets_collection = setup_service
+    standard_set_ids = [str(ObjectId()), str(ObjectId())]
+    standard_sets = [create_standard_set_reference(id) for id in standard_set_ids]
+    
+    # Mock standard sets lookup
+    async def mock_find_one(filter_dict):
+        set_id = filter_dict["_id"]
+        return next((s for s in standard_sets if str(s["_id"]) == str(set_id)), None)
+    
+    standard_sets_collection.find_one = AsyncMock(side_effect=mock_find_one)
+    
+    # Prepare test data with multiple standard sets
+    test_data = valid_code_review_data.copy()
+    test_data["standard_sets"] = standard_set_ids
+    
+    mock_doc = create_code_review_test_data(
+        repository_url=test_data["repository_url"],
+        standard_sets=standard_sets
+    )
+    code_reviews_collection.insert_one = AsyncMock(return_value=setup_mock_result)
+    code_reviews_collection.find_one = AsyncMock(return_value=mock_doc)
+    
+    # When: Create code review request is made
+    with patch('src.services.code_review_service.Process'):
+        response = await async_client.post("/api/v1/code-reviews", json=test_data)
+    
+    # Then: Verify response
+    assert response.status_code == status.HTTP_201_CREATED
+    data = response.json()
+    assert len(data["standard_sets"]) == len(standard_set_ids)
+    for i, standard_set in enumerate(data["standard_sets"]):
+        assert standard_set["_id"] == standard_set_ids[i]
+
+async def test_create_code_review_partial_standard_sets_failure(
+    async_client,
+    setup_service,
+    valid_code_review_data
+):
+    """Test create code review when some standard sets don't exist."""
+    # Given: Mix of valid and invalid standard set IDs
+    _, _, standard_sets_collection = setup_service
+    valid_set = create_standard_set_reference(str(ObjectId()))
+    
+    async def mock_find_one(filter_dict):
+        return valid_set if str(filter_dict["_id"]) == str(valid_set["_id"]) else None
+    
+    standard_sets_collection.find_one = AsyncMock(side_effect=mock_find_one)
+    
+    # Prepare test data with mix of valid/invalid sets
+    test_data = valid_code_review_data.copy()
+    test_data["standard_sets"] = [str(valid_set["_id"]), str(ObjectId())]
+    
+    # When: Create request is made
+    with patch('src.services.code_review_service.Process'):
+        response = await async_client.post("/api/v1/code-reviews", json=test_data)
+    
+    # Then: Verify error response
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    data = response.json()
+    assert "Standard set" in data["detail"]
+    assert "not found" in data["detail"]
+
+async def test_create_code_review_duplicate_standard_sets(
+    async_client,
+    setup_service,
+    valid_code_review_data
+):
+    """Test create code review with duplicate standard sets."""
+    # Given: Duplicate standard set IDs
+    _, code_reviews_collection, standard_sets_collection = setup_service
+    standard_set = create_standard_set_reference(str(ObjectId()))
+    standard_sets_collection.find_one = AsyncMock(return_value=standard_set)
+    
+    # Mock the insert operation to raise validation error
+    async def mock_insert(*args, **kwargs):
+        raise ValueError("Duplicate standard sets are not allowed")
+    
+    code_reviews_collection.insert_one = AsyncMock(side_effect=mock_insert)
+    
+    # Prepare test data with duplicate sets
+    test_data = valid_code_review_data.copy()
+    test_data["standard_sets"] = [str(standard_set["_id"]), str(standard_set["_id"])]
+    
+    # When: Create request is made
+    with patch('src.services.code_review_service.Process'):
+        response = await async_client.post("/api/v1/code-reviews", json=test_data)
+    
+    # Then: Verify error response
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    data = response.json()
+    assert "Duplicate standard sets" in data["detail"]
+
+# Additional Test Cases - Get Code Reviews List
+async def test_get_all_code_reviews_with_sorting(
+    async_client,
+    setup_service
+):
+    """Test retrieving code reviews with correct sorting."""
+    # Given: Multiple code reviews with different timestamps
+    _, code_reviews_collection, _ = setup_service
+    
+    # Create test data with different timestamps
+    mock_reviews = [
+        create_code_review_test_data(
+            repository_url="https://github.com/test/repo1",
+            standard_sets=[]
+        ),
+        create_code_review_test_data(
+            repository_url="https://github.com/test/repo2",
+            standard_sets=[]
+        )
+    ]
+    
+    # Modify timestamps after creation - newer first for descending sort
+    mock_reviews[0]["created_at"] = datetime.fromisoformat("2024-01-02T00:00:00")  # Newer
+    mock_reviews[1]["created_at"] = datetime.fromisoformat("2024-01-01T00:00:00")  # Older
+    
+    # Properly mock cursor operations
+    mock_cursor = AsyncMock()
+    mock_cursor.to_list = AsyncMock(return_value=mock_reviews)
+    mock_cursor.sort = MagicMock(return_value=mock_cursor)
+    code_reviews_collection.find = MagicMock(return_value=mock_cursor)
+    
+    # When: Get all reviews request is made
+    response = await async_client.get("/api/v1/code-reviews")
+    
+    # Then: Verify response and sorting
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert len(data) == 2
+    # Verify descending sort by created_at (newer first)
+    assert data[0]["created_at"] > data[1]["created_at"]
+    mock_cursor.sort.assert_called_once_with("created_at", -1)
+
+async def test_get_all_code_reviews_filter_validation(
+    async_client,
+    setup_service
+):
+    """Test retrieving code reviews with invalid filter parameters."""
+    # Given: Invalid query parameters
+    _, code_reviews_collection, _ = setup_service
+    
+    # Mock find operation to not be called (should fail validation first)
+    mock_cursor = AsyncMock()
+    mock_cursor.to_list = AsyncMock(return_value=[])
+    mock_cursor.sort = MagicMock(return_value=mock_cursor)
+    code_reviews_collection.find = MagicMock(return_value=mock_cursor)
+    
+    # When: Get request is made with invalid filter
+    response = await async_client.get("/api/v1/code-reviews?status=INVALID_STATUS")
+    
+    # Then: Verify error response
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    data = response.json()
+    assert "detail" in data
+    assert any("status" in error["loc"] for error in data["detail"])
+
+# Additional Test Cases - Get Single Code Review
+async def test_get_code_review_by_id_with_relationships(
+    async_client,
+    setup_service
+):
+    """Test retrieving a code review with related data."""
+    # Given: Code review with related standard sets
+    _, code_reviews_collection, _ = setup_service
+    standard_sets = [
+        create_standard_set_reference(str(ObjectId())),
+        create_standard_set_reference(str(ObjectId()))
+    ]
+    mock_review = create_code_review_test_data(
+        repository_url="https://github.com/test/repo",
+        standard_sets=standard_sets
+    )
+    code_reviews_collection.find_one = AsyncMock(return_value=mock_review)
+    
+    # When: Get specific review request is made
+    response = await async_client.get(f"/api/v1/code-reviews/{str(mock_review['_id'])}")
+    
+    # Then: Verify response with relationships
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert len(data["standard_sets"]) == len(standard_sets)
+    for i, standard_set in enumerate(data["standard_sets"]):
+        assert standard_set["_id"] == str(standard_sets[i]["_id"])
+        assert standard_set["name"] == standard_sets[i]["name"]
+
+async def test_get_code_review_by_id_malformed_id(
+    async_client,
+    setup_service
+):
+    """Test get code review with malformed ObjectId."""
+    # Given: Malformed ObjectId
+    malformed_id = "not-an-object-id-at-all"
+    
+    # When: Get request is made with malformed ID
+    response = await async_client.get(f"/api/v1/code-reviews/{malformed_id}")
+    
+    # Then: Verify bad request response
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    data = response.json()
+    assert "Invalid ObjectId format" in data["detail"]
+    assert malformed_id in data["detail"]
+
+async def test_get_code_review_by_id_partial_failure(
+    async_client,
+    setup_service
+):
+    """Test get code review when some related data is missing."""
+    # Given: Code review with missing related data
+    _, code_reviews_collection, _ = setup_service
+    mock_review = create_code_review_test_data(
+        repository_url="https://github.com/test/repo",
+        standard_sets=[{"_id": ObjectId(), "name": "Missing Set"}]
+    )
+    code_reviews_collection.find_one = AsyncMock(return_value=mock_review)
+    
+    # When: Get specific review request is made
+    response = await async_client.get(f"/api/v1/code-reviews/{str(mock_review['_id'])}")
+    
+    # Then: Verify response still returns available data
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert data["_id"] == str(mock_review["_id"])
+    assert data["repository_url"] == mock_review["repository_url"]
+    assert len(data["standard_sets"]) == 1 
