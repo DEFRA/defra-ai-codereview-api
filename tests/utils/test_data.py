@@ -70,4 +70,21 @@ def valid_classification_data():
     """Create valid classification test data for input validation."""
     return {
         "name": "Test Classification"
+    }
+
+@pytest.fixture
+def valid_standard_set_data():
+    """Create valid standard set test data for input validation."""
+    return {
+        "name": "Test Standard Set",
+        "repository_url": "https://github.com/test/repo",
+        "custom_prompt": "Test prompt"
+    }
+
+@pytest.fixture
+def invalid_standard_set_data():
+    """Create invalid standard set test data for input validation."""
+    return {
+        "name": "Test Standard Set"
+        # Missing repository_url and custom_prompt
     } 
