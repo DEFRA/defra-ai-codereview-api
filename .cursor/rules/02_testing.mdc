@@ -37,6 +37,39 @@ Each test file should follow this structure:
 ## Database Mocking Approach
 We use direct collection mocking for all database operations. This provides clearer and more maintainable tests.
 
+### Collection Relationships and State
+When collections have relationships (e.g. foreign keys):
+```python
+@pytest.fixture
+async def mock_collections():
+    """Setup collections with relationships."""
+    primary_collection = AsyncMock()
+    related_collection = AsyncMock()
+    
+    # Setup database relationship
+    mock_db = AsyncMock()
+    mock_db.get_collection = MagicMock(return_value=related_collection)
+    type(primary_collection).database = PropertyMock(return_value=mock_db)
+    
+    # Assign to database setup
+    mock_database_setup.primary = primary_collection
+    mock_database_setup.related = related_collection
+    
+    return primary_collection, related_collection
+```
+
+### Test State Management
+Always include an autouse fixture to manage test state:
+```python
+@pytest.fixture(autouse=True)
+async def setup_and_teardown():
+    """Setup and teardown for each test."""
+    # Setup
+    yield
+    # Teardown - clear dependency overrides
+    app.dependency_overrides = {}
+```
+
 ### Collection Mocking Pattern
 Use a fixture to set up collection mocks:
 ```python
@@ -127,9 +160,6 @@ async def test_operation_scenario_expected(
 ):
     # Given: Setup context with clear comments
     collection = mock_collections
-    # Setup mocks...
-    
-    # Setup repository and service
     repo = Repository(collection)
     service = Service(mock_database_setup, repo)
     app.dependency_overrides[get_service] = lambda: service

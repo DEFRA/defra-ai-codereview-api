@@ -21,14 +21,21 @@ router = APIRouter()
 async def create_code_review(
     code_review: CodeReviewCreate,
     service: CodeReviewService = Depends(get_code_review_service)
-):
+) -> CodeReview:
     """Create a new code review."""
     try:
         return await service.create_review(code_review)
+    except ValueError as e:
+        # Handle validation errors
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
     except Exception as e:
+        # Handle other errors
         logger.error(f"Error creating code review: {str(e)}")
         raise HTTPException(
-            status_code=500,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error creating code review: {str(e)}"
         )
 
@@ -64,11 +71,7 @@ async def get_code_review(
 ):
     """Get a specific code review."""
     try:
-        if not ensure_object_id(_id):
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid review ID format"
-            )
+        ensure_object_id(_id)
             
         review = await service.get_review_by_id(_id)
         if review is None:
@@ -77,6 +80,12 @@ async def get_code_review(
                 detail=f"Code review {_id} not found"
             )
         return review
+    except ValueError as e:
+        # Handle ObjectId validation errors from ensure_object_id
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )    
     except HTTPException:
         raise
     except Exception as e:

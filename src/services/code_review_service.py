@@ -118,6 +118,16 @@ class CodeReviewService:
 
     async def create_review(self, code_review: CodeReviewCreate) -> CodeReview:
         """Create a new code review and start the review process."""
+        # Validate standard sets exist before creating review
+        for standard_set_id in code_review.standard_sets:
+            object_id = ensure_object_id(standard_set_id)
+            if not object_id:
+                raise ValueError(f"Invalid standard set ID format: {standard_set_id}")
+            
+            standard_set = await self.db.standard_sets.find_one({"_id": object_id})
+            if not standard_set:
+                raise ValueError(f"Standard set {standard_set_id} not found")
+
         created_review = await self.repo.create(code_review)
         
         # Start agent in separate process
