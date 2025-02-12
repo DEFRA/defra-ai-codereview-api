@@ -1,9 +1,9 @@
 """Test fixtures for the FastAPI application."""
+from src.main import app
 import pytest
 from fastapi.testclient import TestClient
 from httpx import AsyncClient, ASGITransport
 from unittest.mock import AsyncMock, patch, MagicMock
-from src.main import app
 
 
 @pytest.fixture(autouse=True)
