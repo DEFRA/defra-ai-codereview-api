@@ -1,4 +1,4 @@
-# Implement Integration Test Plan
+# Unified One-Step Prompt
 
 1. **Read and Assess the Plan**  
    - Read the submitted integration test plan file thoroughly to understand the overall integration test plan.  
@@ -33,7 +33,7 @@
    - Continue until all tasks in the highlighted section of the integration test plan are checked off and the tests pass successfully.
 
 7. **Behavior**
-   - Explain Your Chain of Reasoning before writing the tests or making changes.
+   - Explain Your Chain of Reasoning before writing the tests or making
    Clearly document the expected behavior of the integration tests, including both successful outcomes and error conditions.
    - Ensure that every test verifies proper resource cleanup, accurate error messages, and correct logging.
    - Any deviations from expected results should be noted and investigated.
