@@ -6,6 +6,8 @@ globs: .py
 
 This document outlines the recommended rules and practices for mocking MongoDB interactions in our codebase. It builds on our current approach and includes additional suggestions for improved test isolation, clarity, and reliability.
 
+Firstly, ensure you scan the entire testing patterns to determine if Mongo is already being mocked, rather than repeat the implmentation!
+
 ## 1. **General Principles**
 
 - **Isolate Your Tests:**  
@@ -138,11 +140,90 @@ This document outlines the recommended rules and practices for mocking MongoDB i
 - **Logging & Debugging:**
   - Consider adding logging or verbose messages in fixtures to help diagnose test failures related to mocking.
 
-## Conclusion
 
-Adhering to these rules will help you build robust, reliable tests that accurately simulate MongoDB behavior without needing a live database. By following these guidelines, you ensure that your test suite is maintainable and that any future extension or modification remains consistent with our established good practices.
+## 10. **Additional Test Fixtures and Patterns**
 
+### Collection Relationships and State
+When collections have relationships (e.g. foreign keys):
+```python
+@pytest.fixture
+async def mock_collections():
+    """Setup collections with relationships."""
+    primary_collection = AsyncMock()
+    related_collection = AsyncMock()
+    
+    # Setup database relationship
+    mock_db = AsyncMock()
+    mock_db.get_collection = MagicMock(return_value=related_collection)
+    type(primary_collection).database = PropertyMock(return_value=mock_db)
+    
+    # Assign to database setup
+    mock_database_setup.primary = primary_collection
+    mock_database_setup.related = related_collection
+    
+    return primary_collection, related_collection
+```
 
-## Finally
+### Test State Management
+Always include an autouse fixture to manage test state:
+```python
+@pytest.fixture(autouse=True)
+async def setup_and_teardown():
+    """Setup and teardown for each test."""
+    # Setup
+    yield
+    # Teardown - clear dependency overrides
+    app.dependency_overrides = {}
+```
 
-Ensure you scan the entire testing patterns to determine if Mongo is already being mocked, rather than repeat the implmentation!
+### Collection Mocking Pattern
+Use a fixture to set up collection mocks:
+```python
+@pytest.fixture
+async def mock_collections():
+    """Setup mock collections for tests."""
+    collection = AsyncMock()
+    
+    # Mock the database property for nested collections
+    mock_db = AsyncMock()
+    type(collection).database = PropertyMock(return_value=mock_db)
+    
+    return collection
+```
+
+### Service Setup Pattern
+Each test should set up its service with mocked dependencies:
+```python
+# Setup repository and service
+repo = Repository(collection)
+service = Service(mock_database_setup, repo)
+app.dependency_overrides[get_service] = lambda: service
+```
+
+### Collection Operation Mocking
+Mock MongoDB operations directly on the collection object:
+```python
+# Mock find_one operation
+collection.find_one = AsyncMock(return_value=mock_doc)
+
+# Mock find operation with cursor
+mock_cursor = AsyncMock()
+mock_cursor.to_list = AsyncMock(return_value=[mock_doc])
+collection.find = MagicMock(return_value=mock_cursor)
+
+# Mock insert operation
+collection.insert_one = AsyncMock()
+
+# Mock delete operation with count
+mock_result = AsyncMock()
+mock_result.deleted_count = 1
+collection.delete_one = AsyncMock(return_value=mock_result)
+
+# Mock update operation
+mock_result = AsyncMock()
+mock_result.modified_count = 1
+collection.update_one = AsyncMock(return_value=mock_result)
+
+# Mock error cases
+collection.operation = AsyncMock(side_effect=Exception("Database error"))
+```
