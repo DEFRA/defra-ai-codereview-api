@@ -16,7 +16,7 @@ from anthropic import Anthropic
 # local
 from src.utils.logging_utils import setup_logger
 from src.utils.anthropic_client import AnthropicClient
-from src.agents.git_repos_agent import clone_repo
+from src.agents.git_repos_agent import download_repository
 from src.repositories.classification_repo import ClassificationRepository
 from src.repositories.standard_set_repo import StandardSetRepository
 from src.models.classification import Classification
@@ -80,14 +80,6 @@ async def process_standard_set(standard_set_id: str, repository_url: str):
     except Exception as e:
         logger.error(f"Error processing standard set: {str(e)}", exc_info=True)
         raise StandardsProcessingError(str(e)) from e
-
-
-async def download_repository(repository_url: str) -> Path:
-    """Download the repository to a temporary directory."""
-    temp_dir = Path(tempfile.mkdtemp())
-    await clone_repo(repository_url, temp_dir)
-    logger.debug(f"Repository cloned successfully to {temp_dir}")
-    return temp_dir
 
 
 async def get_classifications(db: AsyncIOMotorDatabase) -> List[Classification]:

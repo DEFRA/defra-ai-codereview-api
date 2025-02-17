@@ -64,6 +64,22 @@ async def clone_repo(repo_url: str, target_dir: Path) -> None:
     git.Repo.clone_from(repo_url, str(target_dir))
 
 
+async def download_repository(repository_url: str) -> Path:
+    """Download the repository to a temporary directory.
+
+    Args:
+        repository_url: URL of the Git repository to clone
+
+    Returns:
+        Path: Path to the temporary directory containing the cloned repository
+    """
+    import tempfile
+    temp_dir = Path(tempfile.mkdtemp())
+    await clone_repo(repository_url, temp_dir)
+    logger.debug(f"Repository cloned successfully to {temp_dir}")
+    return temp_dir
+
+
 async def process_repositories(repository_url: str) -> Path:
     """Process the code repository."""
     import tempfile
