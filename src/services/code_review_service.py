@@ -1,5 +1,5 @@
 """Service layer for code review operations."""
-from typing import List
+from typing import List, Optional
 import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from bson import ObjectId
@@ -16,12 +16,14 @@ from src.config.config import settings
 
 logger = setup_logger(__name__)
 
+
 def _run_in_process(review_id: str, repository_url: str, standard_sets: list[str]):
     """Run the review process in a separate process."""
     async def _run():
         client = AsyncIOMotorClient(settings.MONGO_URI)
         db = client[settings.MONGO_INITDB_DATABASE]
         repo = CodeReviewRepository(db.code_reviews)
+        codebase_file = None
 
         try:
             # Update status to in progress
@@ -29,17 +31,18 @@ def _run_in_process(review_id: str, repository_url: str, standard_sets: list[str
 
             # Process repository
             codebase_file = await process_repositories(repository_url)
-            
+
             # Get all classifications
             raw_classifications = await db.classifications.find().to_list(None)
-            classifications = [Classification.model_validate(doc) for doc in raw_classifications]
-            
+            classifications = [Classification.model_validate(
+                doc) for doc in raw_classifications]
+
             # Analyze codebase to determine relevant classifications
             matching_classification_ids = await analyze_codebase_classifications(
                 codebase_file.parent,
                 classifications
             )
-            
+
             # Get standards from database for each standard set
             compliance_reports = []
             for standard_set_id in standard_sets:
@@ -47,19 +50,22 @@ def _run_in_process(review_id: str, repository_url: str, standard_sets: list[str
                     # Get standard set from database
                     object_id = ensure_object_id(standard_set_id)
                     if not object_id:
-                        logger.error(f"Invalid standard set ID format: {standard_set_id}")
+                        logger.error(
+                            f"Invalid standard set ID format: {standard_set_id}")
                         continue
-                        
+
                     standard_set = await db.standard_sets.find_one({"_id": object_id})
                     if not standard_set:
-                        logger.error(f"Standard set {standard_set_id} not found")
+                        logger.error(
+                            f"Standard set {standard_set_id} not found")
                         continue
 
                     # Query for matching standards
                     query = {
                         "standard_set_id": object_id,
                         "$or": [
-                            *[{"classification_ids": obj_id} for obj_id in matching_classification_ids],
+                            *[{"classification_ids": obj_id}
+                                for obj_id in matching_classification_ids],
                             {"$or": [
                                 {"classification_ids": {"$size": 0}},
                                 {"classification_ids": {"$exists": False}},
@@ -70,7 +76,8 @@ def _run_in_process(review_id: str, repository_url: str, standard_sets: list[str
 
                     standards = await db.standards.find(query).to_list(None)
                     if not standards:
-                        logger.warning(f"No matching standards found for standard set {standard_set_id}")
+                        logger.warning(
+                            f"No matching standards found for standard set {standard_set_id}")
                         continue
 
                     # Check compliance
@@ -91,7 +98,8 @@ def _run_in_process(review_id: str, repository_url: str, standard_sets: list[str
                     })
 
                 except Exception as e:
-                    logger.error(f"Error processing standard set {standard_set_id}: {str(e)}")
+                    logger.error(
+                        f"Error processing standard set {standard_set_id}: {str(e)}")
                     continue
 
             # Update the code review with compliance reports
@@ -101,12 +109,20 @@ def _run_in_process(review_id: str, repository_url: str, standard_sets: list[str
             logger.error(f"Error processing code review {review_id}: {str(e)}")
             await repo.update_status(review_id, ReviewStatus.FAILED)
         finally:
+            if codebase_file and codebase_file.exists():
+                try:
+                    codebase_file.unlink()
+                    logger.debug(f"Cleaned up temporary file: {codebase_file}")
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to clean up temporary file {codebase_file}: {e}")
             client.close()
 
     try:
         asyncio.run(_run())
     except Exception as e:
         logger.error(f"Error in review process: {str(e)}")
+
 
 class CodeReviewService:
     """Service for managing code reviews."""
@@ -118,20 +134,36 @@ class CodeReviewService:
 
     async def create_review(self, code_review: CodeReviewCreate) -> CodeReview:
         """Create a new code review and start the review process."""
+        # Validate standard sets exist before creating review
+        for standard_set_id in code_review.standard_sets:
+            object_id = ensure_object_id(standard_set_id)
+            if not object_id:
+                raise ValueError(
+                    f"Invalid standard set ID format: {standard_set_id}")
+
+            standard_set = await self.db.standard_sets.find_one({"_id": object_id})
+            if not standard_set:
+                raise ValueError(f"Standard set {standard_set_id} not found")
+
         created_review = await self.repo.create(code_review)
-        
+
         # Start agent in separate process
         Process(
             target=_run_in_process,
-            args=(str(created_review.id), code_review.repository_url, code_review.standard_sets)
+            args=(str(created_review.id), code_review.repository_url,
+                  code_review.standard_sets)
         ).start()
 
         return created_review
 
-    async def get_all_reviews(self) -> List[CodeReviewList]:
-        """Get all code reviews."""
-        return await self.repo.get_all()
+    async def get_all_reviews(self, status: Optional[ReviewStatus] = None) -> List[CodeReviewList]:
+        """Get all code reviews.
+
+        Args:
+            status: Optional filter by review status
+        """
+        return await self.repo.get_all(status=status)
 
     async def get_review_by_id(self, review_id: str) -> CodeReview:
         """Get a specific code review."""
-        return await self.repo.get_by_id(review_id) 
+        return await self.repo.get_by_id(review_id)

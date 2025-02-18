@@ -10,9 +10,9 @@ from bson.errors import InvalidId
 from src.utils.id_validation import ensure_object_id
 
 logger = setup_logger(__name__)
-router = APIRouter(prefix="/standard-sets", tags=["standard-sets"])
+router = APIRouter()
 
-@router.post("/", 
+@router.post("/standard-sets", 
          response_model=StandardSet,
          status_code=status.HTTP_201_CREATED,
          description="Create a new standard set",
@@ -35,7 +35,7 @@ async def create_standard_set(
         logger.error(f"Unexpected error creating standard set: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-@router.get("/", response_model=list[StandardSet])
+@router.get("/standard-sets", response_model=list[StandardSet])
 async def get_standard_sets(
     service: StandardSetService = Depends(get_standard_set_service)
 ):
@@ -49,15 +49,17 @@ async def get_standard_sets(
         logger.error(f"Error getting standard sets: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/{standard_set_id}", response_model=StandardSetWithStandards)
+@router.get("/standard-sets/{standard_set_id}", response_model=StandardSetWithStandards)
 async def get_standard_set(
     standard_set_id: str,
     service: StandardSetService = Depends(get_standard_set_service)
 ) -> StandardSetWithStandards:
     """Get a standard set by ID."""
     try:
-        if not ensure_object_id(standard_set_id):
-            raise HTTPException(status_code=400, detail="Invalid ObjectId format")
+        try:
+            object_id = ensure_object_id(standard_set_id)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
             
         standard_set = await service.get_standard_set_by_id(standard_set_id)
         if not standard_set:
@@ -69,7 +71,7 @@ async def get_standard_set(
         logger.error(f"Unexpected error getting standard set: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-@router.delete("/{standard_set_id}", 
+@router.delete("/standard-sets/{standard_set_id}", 
            description="Delete a standard set",
            responses={
                200: {"description": "Standard set deleted successfully"},
@@ -82,8 +84,10 @@ async def delete_standard_set(
 ) -> dict:
     """Delete a standard set and all its associated standards."""
     try:
-        if not ensure_object_id(standard_set_id):
-            raise HTTPException(status_code=400, detail="Invalid ObjectId format")
+        try:
+            ensure_object_id(standard_set_id)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
             
         success = await service.delete_standard_set(standard_set_id)
         if not success:

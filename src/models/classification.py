@@ -1,12 +1,12 @@
 """Classification model for managing technology/language classifications."""
 from datetime import datetime, UTC
 from typing import Optional
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, constr
 from src.models.code_review import PyObjectId
 
 class ClassificationBase(BaseModel):
     """Base classification model."""
-    name: str = Field(..., description="Name of the classification (e.g. Python, Node.js)")
+    name: constr(min_length=1, strip_whitespace=True) = Field(..., description="Name of the classification (e.g. Python, Node.js)")
 
 class ClassificationCreate(ClassificationBase):
     """Classification creation model."""

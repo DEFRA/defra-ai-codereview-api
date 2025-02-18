@@ -50,10 +50,19 @@ class CodeReviewRepository:
             logger.error(f"Error creating code review: {str(e)}")
             raise
 
-    async def get_all(self) -> List[CodeReviewList]:
-        """Get all code reviews."""
+    async def get_all(self, status: Optional[ReviewStatus] = None) -> List[CodeReviewList]:
+        """Get all code reviews.
+        
+        Args:
+            status: Optional filter by review status
+        """
         try:
-            reviews = await self.collection.find().sort("updated_at", -1).to_list(None)
+            # Build query based on status filter
+            query = {}
+            if status is not None:
+                query["status"] = status
+                
+            reviews = await self.collection.find(query).sort("created_at", -1).to_list(None)
             valid_reviews = []
             
             for review in reviews:

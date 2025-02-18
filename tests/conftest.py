@@ -1,59 +1,63 @@
-"""Test configuration and fixtures."""
-import os
-import sys
-from pathlib import Path
-from dotenv import load_dotenv
-
-# Get the project root directory (one level up from tests)
-project_root = str(Path(__file__).parent.parent)
-
-# Add project root to Python path
-sys.path.append(project_root)
-
-# Load test environment variables before any imports
-load_dotenv(".env.test", override=True)
-
-import asyncio
-from typing import AsyncGenerator, Generator
-from unittest.mock import patch
-
-import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-from mongomock_motor import AsyncMongoMockClient
-
+"""Test fixtures for the FastAPI application."""
 from src.main import app
-from src.config.config import settings
-from src.database.database_utils import get_database
-from src.api.dependencies import get_classifications_collection, get_repository
+import pytest
+from fastapi.testclient import TestClient
+from httpx import AsyncClient, ASGITransport
+from unittest.mock import AsyncMock, patch, MagicMock
 
-@pytest.fixture(scope="function")
-async def mock_mongodb() -> AsyncGenerator[AsyncMongoMockClient, None]:
-    """Create a mock MongoDB client for testing."""
-    mock_client = AsyncMongoMockClient()
-    mock_db = mock_client[f"{settings.MONGO_INITDB_DATABASE}_test"]
-    
-    # Override all database access points
-    app.dependency_overrides[get_database] = lambda: mock_db
-    app.dependency_overrides[get_classifications_collection] = lambda: mock_db.classifications
-    app.dependency_overrides[get_repository] = lambda: ClassificationRepository(mock_db.classifications)
-    
-    # Also patch the global database connection
-    with patch('src.database.db', mock_db):
+
+@pytest.fixture(autouse=True)
+async def mock_database_setup():
+    """Mock all database-related components."""
+    mock_db = AsyncMock()
+    mock_db.client = MagicMock()
+
+    # Add attributes for each collection used across repositories
+    for col in ["classifications", "code_reviews", "standard_sets", "standards"]:
+        collection_mock = AsyncMock()
+        collection_mock.database = mock_db
+        setattr(mock_db, col, collection_mock)
+
+    with patch("src.main.init_database", return_value=mock_db), \
+            patch("src.database.database_utils.client", new=MagicMock()), \
+            patch("src.database.database_utils.get_database", return_value=mock_db), \
+            patch("motor.motor_asyncio.AsyncIOMotorClient", return_value=MagicMock()):
+
+        app.state.db = mock_db
         yield mock_db
-    
-    # Clean up
-    await mock_client.drop_database(settings.MONGO_INITDB_DATABASE)
-    app.dependency_overrides.clear()
-    mock_client.close()
 
-@pytest.fixture(scope="function")
-async def test_app(mock_mongodb) -> AsyncGenerator[FastAPI, None]:
-    """Create a test instance of the FastAPI application with mocked MongoDB."""
-    yield app
 
-@pytest.fixture(scope="function")
-def test_client(test_app: FastAPI) -> Generator[TestClient, None, None]:
-    """Create a test client for making HTTP requests."""
-    with TestClient(test_app) as client:
-        yield client 
+@pytest.fixture(autouse=True)
+async def reset_app_state():
+    """Reset application state before each test."""
+    app.dependency_overrides = {}
+    yield
+    app.dependency_overrides = {}
+
+
+@pytest.fixture
+def client(mock_database_setup):
+    """Create a test client for the FastAPI application."""
+    with TestClient(app) as test_client:
+        yield test_client
+
+
+@pytest.fixture
+async def async_client(mock_database_setup):
+    """Create an async test client for the FastAPI application.
+
+    Uses ASGITransport to make requests directly to the FastAPI app
+    without making real HTTP calls.
+    """
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test"
+    ) as ac:
+        yield ac
+
+
+@pytest.fixture(autouse=True)
+def mock_env_vars(monkeypatch):
+    """Mock environment variables."""
+    monkeypatch.setenv("MONGODB_URL", "mongodb://test:27017")
+    monkeypatch.setenv("DATABASE_NAME", "test_db")

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import List, Tuple
 from src.utils.logging_utils import setup_logger
 from src.config.config import settings
+import tempfile
 
 logger = setup_logger(__name__)
 
@@ -62,6 +63,26 @@ async def clone_repo(repo_url: str, target_dir: Path) -> None:
         shutil.rmtree(target_dir)
 
     git.Repo.clone_from(repo_url, str(target_dir))
+
+
+async def download_repository(repository_url: str) -> Path:
+    """Download the repository to a temporary directory.
+
+    Args:
+        repository_url: URL of the Git repository to clone
+
+    Returns:
+        Path: Path to the temporary directory containing the cloned repository.
+              Note: This directory will be cleaned up automatically.
+    """
+    # Use TemporaryDirectory to ensure cleanup
+    temp_dir = tempfile.TemporaryDirectory()
+    temp_path = Path(temp_dir.name)
+    await clone_repo(repository_url, temp_path)
+    logger.debug(f"Repository cloned successfully to {temp_path}")
+    # Store the TemporaryDirectory object as an attribute to prevent early cleanup
+    temp_path._temp_dir = temp_dir  # type: ignore
+    return temp_path
 
 
 async def process_repositories(repository_url: str) -> Path:

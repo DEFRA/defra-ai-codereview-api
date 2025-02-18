@@ -64,10 +64,15 @@ class StandardSetRepository:
 
     async def get_all(self):
         """Get all standard sets."""
-        standard_sets = []
-        async for standard_set in self.collection.find():
-            standard_sets.append(standard_set)
-        return standard_sets 
+        try:
+            standard_sets = await self.collection.find().to_list(None)
+            # Convert ObjectIds to strings
+            for standard_set in standard_sets:
+                standard_set["_id"] = str(standard_set["_id"])
+            return standard_sets
+        except Exception as e:
+            logger.error(f"Error getting all standard sets: {e}")
+            raise RepositoryError(f"Error getting all standard sets: {e}")
 
     async def update(self, standard_set: StandardSetCreate) -> StandardSet:
         """Update an existing standard set."""

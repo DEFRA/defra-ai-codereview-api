@@ -58,15 +58,8 @@ class ClassificationRepository:
     async def get_all(self) -> List[Classification]:
         """Get all classifications."""
         try:
-            cursor = self.collection.find()
-            classifications = []
-            async for doc in cursor:
-                doc["_id"] = str(doc["_id"])
-                try:
-                    classifications.append(Classification.model_validate(doc))
-                except Exception as e:
-                    logger.warning(f"Skipping invalid classification document: {str(e)}")
-            return classifications
+            docs = await self.collection.find().to_list(None)
+            return [Classification.model_validate({**d, "_id": str(d["_id"])}) for d in docs]
         except Exception as e:
             logger.error(f"Error getting all classifications: {str(e)}")
             raise
@@ -85,31 +78,13 @@ class ClassificationRepository:
                 
             result = await self.collection.delete_one({"_id": object_id})
             return result.deleted_count > 0
-        except Exception as e:
-            logger.error(f"Error deleting classification: {str(e)}")
+        except ValueError:
+            # Handle invalid ObjectId format
             return False
-
-    async def update(self, id: str, classification: ClassificationCreate) -> Optional[Classification]:
-        """Update a classification."""
-        try:
-            object_id = ensure_object_id(id)
-            if not object_id:
-                return None
-                
-            update_data = classification.model_dump()
-            update_data["updated_at"] = datetime.now(UTC)
-            
-            result = await self.collection.update_one(
-                {"_id": object_id},
-                {"$set": update_data}
-            )
-            
-            if result.modified_count > 0:
-                return await self.get_by_id(id)
-            return None
         except Exception as e:
-            logger.error(f"Error updating classification: {str(e)}")
-            return None
+            # Let unexpected errors propagate
+            logger.error(f"Error deleting classification: {str(e)}")
+            raise
 
     async def get_by_name(self, name: str) -> Optional[Classification]:
         """Get a classification by name."""
@@ -121,4 +96,4 @@ class ClassificationRepository:
             return None
         except Exception as e:
             logger.error(f"Error getting classification by name: {str(e)}")
-            return None 
+            raise 
