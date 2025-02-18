@@ -17,3 +17,9 @@ echo "Removing MongoDB volume..."
 docker volume rm $(docker volume ls -q --filter name=mongodb) 2>/dev/null || true
 
 echo "MongoDB cleanup complete!"
+
+# Restart MongoDB container using docker-compose
+echo "Starting MongoDB container with docker-compose..."
+docker-compose up -d mongodb
+
+echo "MongoDB container started successfully!"
