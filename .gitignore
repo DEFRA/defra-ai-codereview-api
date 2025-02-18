@@ -426,3 +426,8 @@ logs/
 
 # Test environment variables
 .env.test
+
+# Coverage reports
+coverage/
+.coverage
+htmlcov/

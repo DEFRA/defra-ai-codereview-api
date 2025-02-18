@@ -4,15 +4,15 @@ import git
 import logging
 from pathlib import Path
 from typing import List, Tuple
-from src.logging_config import setup_logger
-from src.config import settings
+from src.utils.logging_utils import setup_logger
+from src.config.config import settings
+import tempfile
 
 logger = setup_logger(__name__)
 
 STANDARDS_REPO = "https://github.com/DEFRA/software-development-standards"
 DATA_DIR = Path("data")
 CODEBASE_DIR = DATA_DIR / "codebase"
-STANDARDS_DIR = DATA_DIR / "standards"
 
 # Files to exclude when flattening
 EXCLUDED_FILES = {
@@ -54,53 +54,6 @@ async def flatten_repository(repo_path: Path, output_file: Path) -> None:
                     logger.warning(f"Skipping file {file_path}: {str(e)}")
 
 
-async def process_standards_repo(temp_dir: Path) -> List[Path]:
-    """Process standards repository and save each file separately."""
-    logger.debug("Processing standards repository")
-    standards_files = []
-
-    # If LLM testing is enabled, use hardcoded test files
-    if settings.LLM_TESTING:
-        logger.info("LLM testing mode enabled - using test standards files")
-        test_files = [x.strip() for x in settings.LLM_TESTING_STANDARDS_FILES.split(",") if x.strip()]
-        for file in test_files:
-            output_file = STANDARDS_DIR / f"{file}.txt"
-            with open(output_file, 'w', encoding='utf-8') as f:
-                f.write(f"# Test File: {file}\n")
-                f.write("This is a test standards file for LLM testing.")
-            standards_files.append(output_file)
-            logger.debug(f"Created test standards file: {file}")
-            
-        return standards_files
-
-    excluded_files = {'README.md', 'CONTRIBUTING.md'}
-    valid_suffixes = ('_principles.md', '_standards.md')
-
-    for root, _, files in os.walk(temp_dir):
-        for file in files:
-            if '.git' in root or file in excluded_files:
-                continue
-                
-            if not any(file.endswith(suffix) for suffix in valid_suffixes):
-                continue
-
-            source_path = Path(root) / file
-            try:
-                with open(source_path, 'r', encoding='utf-8') as source_file:
-                    content = source_file.read()
-
-                output_file = STANDARDS_DIR / f"{file}.txt"
-                with open(output_file, 'w', encoding='utf-8') as f:
-                    f.write(f"# File: {file}\n")
-                    f.write(content)
-                standards_files.append(output_file)
-                logger.debug(f"Processed standards file: {file}")
-            except (UnicodeDecodeError, IOError) as e:
-                logger.warning(f"Skipping standards file {source_path}: {str(e)}")
-
-    return standards_files
-
-
 async def clone_repo(repo_url: str, target_dir: Path) -> None:
     """Clone a git repository to the target directory."""
     logger.debug(f"Cloning repository {repo_url} to {target_dir}")
@@ -109,31 +62,46 @@ async def clone_repo(repo_url: str, target_dir: Path) -> None:
         import shutil
         shutil.rmtree(target_dir)
 
-    git.Repo.clone_from(repo_url, target_dir)
+    git.Repo.clone_from(repo_url, str(target_dir))
 
 
-async def process_repositories(repository_url: str) -> Tuple[Path, List[Path]]:
-    """Process both the code repository and standards repository."""
+async def download_repository(repository_url: str) -> Path:
+    """Download the repository to a temporary directory.
+
+    Args:
+        repository_url: URL of the Git repository to clone
+
+    Returns:
+        Path: Path to the temporary directory containing the cloned repository.
+              Note: This directory will be cleaned up automatically.
+    """
+    # Use TemporaryDirectory to ensure cleanup
+    temp_dir = tempfile.TemporaryDirectory()
+    temp_path = Path(temp_dir.name)
+    await clone_repo(repository_url, temp_path)
+    logger.debug(f"Repository cloned successfully to {temp_path}")
+    # Store the TemporaryDirectory object as an attribute to prevent early cleanup
+    temp_path._temp_dir = temp_dir  # type: ignore
+    return temp_path
+
+
+async def process_repositories(repository_url: str) -> Path:
+    """Process the code repository."""
     import tempfile
 
     # Create necessary directories
     CODEBASE_DIR.mkdir(parents=True, exist_ok=True)
-    STANDARDS_DIR.mkdir(parents=True, exist_ok=True)
 
-    repo_name = repository_url.split('/')[-1].replace('.git', '')
+    # Extract repo name from URL
+    repo_name = os.path.basename(repository_url).replace('.git', '')
     codebase_file = CODEBASE_DIR / f"{repo_name}.txt"
 
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
         code_repo_dir = temp_path / "code"
-        standards_repo_dir = temp_path / "standards"
 
         # Clone and process code repository
         await clone_repo(repository_url, code_repo_dir)
         await flatten_repository(code_repo_dir, codebase_file)
 
-        # Clone and process standards repository
-        await clone_repo(STANDARDS_REPO, standards_repo_dir)
-        standards_files = await process_standards_repo(standards_repo_dir)
-
-        return codebase_file, standards_files
+        return codebase_file

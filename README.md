@@ -1,21 +1,26 @@
 # Code Review API
 
-A Python FastAPI service that provides endpoints for creating and retrieving code reviews, with asynchronous analysis using Anthropic's API.
+A Python FastAPI service that provides endpoints for creating and retrieving AI-powered code reviews, with asynchronous analysis using Anthropic's API.
 
 ## Features
 
 - Create and retrieve code reviews
 - Asynchronous code analysis workflow
-- MongoDB storage
-- Anthropic API integration
-- Structured logging
-- Health check endpoint
+- MongoDB storage with schema validation
+- Anthropic API integration for intelligent code analysis
+- Structured logging with configurable outputs
+- Health check endpoint with database connectivity status
+- Standard sets management for code review rules
+- Classification system for technology-specific standards
+- Git repository analysis and cloning
+- Comprehensive test coverage
 
 ## Prerequisites
 
-- Python 3.8+
-- MongoDB (running in Docker)
+- Python 3.12.8+
+- MongoDB 6.0+ (running in Docker)
 - Anthropic API key
+- Git (for repository analysis)
 
 ## Installation
 
@@ -36,8 +41,8 @@ cd code-review-api
 
 2. Create a virtual environment and activate it:
 ```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 ```
 
 3. Install dependencies:
@@ -47,8 +52,7 @@ pip install -r requirements.txt
 
 4. Create a `.env` file in the project root:
 ```env
-MONGO_URI=mongodb://root:example@localhost:27017/
-ANTHROPIC_API_KEY=your_anthropic_api_key
+See .env.example for required variables
 ```
 
 ## Running MongoDB
@@ -71,6 +75,17 @@ docker-compose down
 
 The MongoDB data will persist in a named volume `code_review_mongodb_data`.
 
+### MongoDB Schema Validation
+
+The database uses schema validation to ensure data integrity:
+
+- **Classifications**: Stores technology/language classifications
+- **Standard Sets**: Contains predefined sets of standards with repository links
+- **Standards**: Individual standards with text content and classifications
+- **Code Reviews**: Review requests and results with compliance reports
+
+Schema validation is automatically applied during database initialisation.
+
 ## Running the API
 
 Start the FastAPI server:
@@ -83,27 +98,55 @@ The API will be available at `http://localhost:8000`
 
 ## API Endpoints
 
-### Create a Code Review
+### Code Reviews
 
 ```http
+# Create a Code Review
 POST /api/v1/code-reviews
 Content-Type: application/json
 
 {
-    "repository_url": "https://github.com/user/repo"
+    "repository_url": "https://github.com/user/repo",
+    "standard_sets": ["python", "security"]
 }
-```
 
-### List All Code Reviews
-`
-```http
+# List All Code Reviews
 GET /api/v1/code-reviews
+
+# Get a Specific Code Review
+GET /api/v1/code-reviews/{_id}
 ```
 
-### Get a Specific Code Review
+### Standard Sets
 
 ```http
-GET /api/v1/code-reviews/{_id}
+# Create a Standard Set
+POST /api/v1/standard-sets
+Content-Type: application/json
+
+{
+    "name": "python",
+    "repository_url": "https://github.com/org/standards",
+    "custom_prompt": "Optional custom prompt for analysis"
+}
+
+# List All Standard Sets
+GET /api/v1/standard-sets
+```
+
+### Classifications
+
+```http
+# Create a Classification
+POST /api/v1/classifications
+Content-Type: application/json
+
+{
+    "name": "python"
+}
+
+# List All Classifications
+GET /api/v1/classifications
 ```
 
 ### Health Check
@@ -148,12 +191,6 @@ src/
 pytest
 ```
 
-## Environment Variables
-
-| Variable | Description | Required |
-|----------|-------------|-----------|
-| MONGO_URI | MongoDB connection string | Yes |
-| ANTHROPIC_API_KEY | Anthropic API key | Yes |
 
 ## Error Handling
 

@@ -1,52 +1,63 @@
-"""Test configuration and fixtures."""
-import os
-import sys
-from pathlib import Path
-from dotenv import load_dotenv
-
-# Get the project root directory (one level up from tests)
-project_root = str(Path(__file__).parent.parent)
-
-# Add project root to Python path
-sys.path.append(project_root)
-
-# Load test environment variables before any imports
-load_dotenv(".env.test", override=True)
-
-import asyncio
-from typing import AsyncGenerator, Generator
-from unittest.mock import AsyncMock
-
-import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-from mongomock_motor import AsyncMongoMockClient
-
+"""Test fixtures for the FastAPI application."""
 from src.main import app
-from src.config import settings
-from src.database import get_database
+import pytest
+from fastapi.testclient import TestClient
+from httpx import AsyncClient, ASGITransport
+from unittest.mock import AsyncMock, patch, MagicMock
+
+
+@pytest.fixture(autouse=True)
+async def mock_database_setup():
+    """Mock all database-related components."""
+    mock_db = AsyncMock()
+    mock_db.client = MagicMock()
+
+    # Add attributes for each collection used across repositories
+    for col in ["classifications", "code_reviews", "standard_sets", "standards"]:
+        collection_mock = AsyncMock()
+        collection_mock.database = mock_db
+        setattr(mock_db, col, collection_mock)
+
+    with patch("src.main.init_database", return_value=mock_db), \
+            patch("src.database.database_utils.client", new=MagicMock()), \
+            patch("src.database.database_utils.get_database", return_value=mock_db), \
+            patch("motor.motor_asyncio.AsyncIOMotorClient", return_value=MagicMock()):
+
+        app.state.db = mock_db
+        yield mock_db
+
+
+@pytest.fixture(autouse=True)
+async def reset_app_state():
+    """Reset application state before each test."""
+    app.dependency_overrides = {}
+    yield
+    app.dependency_overrides = {}
+
 
 @pytest.fixture
-async def mock_mongodb() -> AsyncGenerator[AsyncMongoMockClient, None]:
-    """Create a mock MongoDB client."""
-    mock_client = AsyncMongoMockClient()
-    mock_db = mock_client[f"{settings.MONGO_INITDB_DATABASE}_test"]
-    yield mock_db
-    await mock_client.drop_database(f"{settings.MONGO_INITDB_DATABASE}_test")
-    mock_client.close()
+def client(mock_database_setup):
+    """Create a test client for the FastAPI application."""
+    with TestClient(app) as test_client:
+        yield test_client
+
 
 @pytest.fixture
-async def test_app(mock_mongodb) -> AsyncGenerator[FastAPI, None]:
-    """Create a test instance of the FastAPI application with mocked MongoDB."""
-    async def mock_get_database():
-        return mock_mongodb
-    
-    app.dependency_overrides[get_database] = mock_get_database
-    yield app
-    app.dependency_overrides.clear()
+async def async_client(mock_database_setup):
+    """Create an async test client for the FastAPI application.
 
-@pytest.fixture
-def test_client(test_app: FastAPI) -> Generator[TestClient, None, None]:
-    """Create a test client for making HTTP requests."""
-    with TestClient(test_app) as client:
-        yield client 
+    Uses ASGITransport to make requests directly to the FastAPI app
+    without making real HTTP calls.
+    """
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test"
+    ) as ac:
+        yield ac
+
+
+@pytest.fixture(autouse=True)
+def mock_env_vars(monkeypatch):
+    """Mock environment variables."""
+    monkeypatch.setenv("MONGODB_URL", "mongodb://test:27017")
+    monkeypatch.setenv("DATABASE_NAME", "test_db")
