@@ -38,10 +38,9 @@ Currently, the system is configured with a **hard-coded** set of standards.
 * **Rendering**: Nunjucks templating, server-side rendering
 * **Tooling**: Webpack, Babel, TypeScript, Jest, ESLint, Prettier
 * **Current Features**:
-  * A home page for repository submission
-  * Health check endpoints
-  * Error handling pages
-  * Basic routing for future expansion
+  * A page for submission of code reviews
+  * A page for viewing all previous code views
+  * A page for viewing code view details
 
 ## 3. Problem Statement & Goals
 
@@ -77,8 +76,8 @@ Currently, the system is configured with a **hard-coded** set of standards.
 
 4. **Frontend Enhancements**
    * New pages to manage standard sets and classifications
-   * Modified home page to show multiple standard sets for selection
-   * Code review detail pages that tabulate reports by standard set
+   * Modified submission page to show multiple standard sets for selection
+   * Modified code review detail pages with tabs for each report by standard set
 
 ## 5. Detailed Requirements
 
@@ -226,19 +225,19 @@ The feature changes the existing async agentic processing of codebases, adding c
 
 ### 6.3 Standards Management (✅ Feature Completed)
 
-1. **Manage Standards Page (`/standard-sets`)**
-   * Display a **table** of all standard-sets (from `GET /api/v1/standard-sets`)
+1. **Manage Standards Page (`/standards/standard-sets`)**
+   * Display a **table** of all standard-sets (calls API `GET /api/v1/standard-sets`)
      * Columns: Standard-Set Name, Repository URL (opens in new tab), Delete button
-     * **Delete** calls `DELETE /api/v1/standard-sets/{id}`
-   * **Add New Standard-Set** button -> `/standard-sets/new`
+     * **Delete** calls API `DELETE /api/v1/standard-sets/{id}`
+   * **Add New Standard-Set** button -> `/standards/standard-sets/new`
 
-2. **Add New Standard-Set Page (`/standard-sets/new`)**
+2. **Add New Standard-Set Page (`/standards/standard-sets/new`)**
    * Form fields: `name`, `repository_url`, `custom_prompt`
-   * On submit, **POST** to `/api/v1/standard-sets`
-   * If success, **redirect** to `/standard-sets/{id}` (the detail page)
+   * On submit, calls API  `POST /api/v1/standard-sets`
+   * If success, **redirect** to `/standards/standard-sets/{id}` (the standards detail page)
 
-3. **Standard Set Detail Page (`/standard-sets/{id}`)**
-   * Query **GET** `/api/v1/standard-sets/{id}` on page load
+3. **Standard Set Detail Page (`/standards/standard-sets/{id}`)**
+   * Call API **GET** `/api/v1/standard-sets/{id}` on page load
    * Show:
      * Standard-Set Name
      * Repository URL (open in new tab)
@@ -248,20 +247,21 @@ The feature changes the existing async agentic processing of codebases, adding c
        * Standard Text
        * Comma-separated list of classifications
        * Repository Path (opens in new tab if relevant)
+       * Classifications 
 
-### 6.4 Home Page Updates
+### 6.4 Standards Submission Updates
 * **Standard-Sets Checkbox List**
-  * Dynamically fetched from `GET /api/v1/standard-sets`
+  * The values are dynamically generated, using the fetched from `GET /api/v1/standard-sets`
   * The user can select one or more sets to include in their code review request
-  * The form then sends an array of standard-set IDs with `repository_url` to `POST /api/v1/code-reviews`
+  * The form then sends an array of standard-set IDs with `repository_url` to API `POST /api/v1/code-reviews`
   * Add a 'check all' link that checks all the standard-sets to be included in the code review
 
 ### 6.5 Code Review Record Detail Page Updates
 * **Reports Array**
   * Each code review can now have multiple standard-set reports
-  * Show the list of standard-sets used for that review in the details section
-  * Populate the existing **tabbed interface** or separate tabs for each standard-set's Markdown result
+  * Populate the existing **tabbed interface** dynamically using the new `standard_sets array` from the existing API `GET /api/v1/code-reviews/${id}`
   * Each tab title corresponds to the standard-set name
+  * The content of the tab shows the Markdown reports generated for the corresponding each standard-set
 
 ## 7. Data Model & ER Diagram (Conceptual)
 
